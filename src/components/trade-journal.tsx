@@ -22,6 +22,7 @@ import {
   formatYuan,
   signedPct,
   theoreticalMaxPct,
+  theoreticalMinPct,
   type IpoItem,
 } from "@/lib/ipo";
 import {
@@ -235,7 +236,8 @@ export function TradeJournal({
             <div className="flex flex-col justify-end gap-2 md:col-span-2 xl:col-span-3">
               {selected ? (
                 <p className="text-xs text-muted-foreground">
-                  {selected.股票简称} 发行价 {formatYuan(selected.发行价)} · 理论最大涨幅{" "}
+                  {selected.股票简称} 发行价 {formatYuan(selected.发行价)} · 理论区间{" "}
+                  {signedPct(theoreticalMinPct(selected))} ~{" "}
                   {signedPct(theoreticalMaxPct(selected))}
                   {previewCost != null ? ` · 本金 ${formatYuan(previewCost)}` : ""}
                   {previewPct != null ? ` · 本笔收益率 ${signedPct(previewPct)}` : ""}
@@ -282,7 +284,8 @@ export function TradeJournal({
               <TradeCard
                 key={trade.id}
                 trade={trade}
-                theory={theoreticalMaxPct(byCode.get(trade.code))}
+                theoryMin={theoreticalMinPct(byCode.get(trade.code))}
+                theoryMax={theoreticalMaxPct(byCode.get(trade.code))}
                 onEdit={() => startEdit(trade)}
                 onDelete={() => onDelete(trade.id)}
               />
@@ -300,7 +303,7 @@ export function TradeJournal({
                   <TableHead className="text-right">本金</TableHead>
                   <TableHead className="text-right">次日收益</TableHead>
                   <TableHead className="text-right">实际收益率</TableHead>
-                  <TableHead className="text-right">理论最大</TableHead>
+                  <TableHead className="text-right">理论区间</TableHead>
                   <TableHead />
                 </TableRow>
               </TableHeader>
@@ -347,6 +350,7 @@ export function TradeJournal({
                       {signedPct(actualReturnPct(trade))}
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums text-muted-foreground">
+                      {signedPct(theoreticalMinPct(byCode.get(trade.code)))} ~{" "}
                       {signedPct(theoreticalMaxPct(byCode.get(trade.code)))}
                     </TableCell>
                     <TableCell className="text-right">
@@ -392,12 +396,14 @@ function Field({
 
 function TradeCard({
   trade,
-  theory,
+  theoryMin,
+  theoryMax,
   onEdit,
   onDelete,
 }: {
   trade: Trade;
-  theory: number | null;
+  theoryMin: number | null;
+  theoryMax: number | null;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -428,8 +434,10 @@ function TradeCard({
           </p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">理论最大</p>
-          <p>{signedPct(theory)}</p>
+          <p className="text-xs text-muted-foreground">理论区间</p>
+          <p>
+            {signedPct(theoryMin)} ~ {signedPct(theoryMax)}
+          </p>
         </div>
       </div>
       <div className="mt-3 flex gap-2">

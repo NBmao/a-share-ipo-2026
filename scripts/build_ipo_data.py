@@ -124,6 +124,66 @@ def fetch_quotes(codes: list[str]) -> dict[str, dict]:
     return quotes
 
 
+def sina_symbol(code: str) -> str:
+    return f"{'sh' if code.startswith('6') else 'sz'}{code}"
+
+
+def fetch_day_bars(code: str, datalen: int = 320) -> list[dict]:
+    """未复权日K：day / open / high / low / close。"""
+    url = (
+        "https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/"
+        f"CN_MarketData.getKLineData?symbol={sina_symbol(code)}&scale=240&ma=no&datalen={datalen}"
+    )
+    last_err: Exception | None = None
+    for i in range(4):
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "User-Agent": UA["User-Agent"],
+                    "Referer": "https://finance.sina.com.cn/",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                raw = resp.read().decode("utf-8")
+            rows = json.loads(raw)
+            if not isinstance(rows, list):
+                return []
+            out: list[dict] = []
+            for row in rows:
+                out.append(
+                    {
+                        "day": row.get("day"),
+                        "open": num(row.get("open")),
+                        "high": num(row.get("high")),
+                        "low": num(row.get("low")),
+                        "close": num(row.get("close")),
+                    }
+                )
+            return out
+        except Exception as exc:  # noqa: BLE001
+            last_err = exc
+            time.sleep(1.2 * (i + 1))
+    print(f"warn: day bars failed for {code}: {last_err}")
+    return []
+
+
+def first_two_sessions(
+    bars: list[dict], listing_date: str | None
+) -> tuple[dict | None, dict | None]:
+    if not listing_date or not bars:
+        return None, None
+    idx = next((i for i, bar in enumerate(bars) if bar.get("day") == listing_date), None)
+    if idx is None:
+        # 若上市日休市/对不齐，取上市日及之后第一根
+        idx = next((i for i, bar in enumerate(bars) if (bar.get("day") or "") >= listing_date), None)
+    if idx is None:
+        return None, None
+    day1 = bars[idx]
+    day2 = bars[idx + 1] if idx + 1 < len(bars) else None
+    return day1, day2
+
+
 def listing_status(listing_date: str | None, issue_price: float | None, apply_date: str | None) -> str:
     today = AS_OF.strftime("%Y-%m-%d")
     if listing_date:
@@ -145,6 +205,15 @@ def main() -> None:
 
     stocks = [row for code, row in by_code.items() if board_of(code)]
     quotes = fetch_quotes([row["SECURITY_CODE"] for row in stocks])
+
+    day_bars: dict[str, list[dict]] = {}
+    for row in stocks:
+        code = row["SECURITY_CODE"]
+        listing_date = parse_date(row.get("LISTING_DATE"))
+        if not listing_date or listing_date > AS_OF.strftime("%Y-%m-%d"):
+            continue
+        day_bars[code] = fetch_day_bars(code)
+        time.sleep(0.15)
 
     records: list[dict] = []
     for row in stocks:
@@ -178,15 +247,28 @@ def main() -> None:
 
         first_open = num(row.get("OPEN_PRICE"))
         first_close = num(row.get("CLOSE_PRICE"))
-        high_chg = num(row.get("LD_HIGH_CHANG"))
-        first_high = (
-            issue_price * (1 + high_chg / 100.0)
-            if issue_price and high_chg is not None
-            else None
-        )
-        if first_high is None:
-            day_prices = [p for p in (first_open, first_close) if p is not None]
-            first_high = max(day_prices) if day_prices else None
+        day1, day2 = first_two_sessions(day_bars.get(code) or [], listing_date)
+        if day1:
+            first_open = day1.get("open") or first_open
+            first_close = day1.get("close") or first_close
+            first_high = day1.get("high")
+            first_low = day1.get("low")
+        else:
+            high_chg = num(row.get("LD_HIGH_CHANG"))
+            first_high = (
+                issue_price * (1 + high_chg / 100.0)
+                if issue_price and high_chg is not None
+                else None
+            )
+            if first_high is None:
+                day_prices = [p for p in (first_open, first_close) if p is not None]
+                first_high = max(day_prices) if day_prices else None
+            first_low = min(p for p in (first_open, first_close) if p is not None) if any(
+                p is not None for p in (first_open, first_close)
+            ) else None
+        second_high = day2.get("high") if day2 else None
+        second_low = day2.get("low") if day2 else None
+        second_date = day2.get("day") if day2 else None
 
         last_price = num(quote.get("f2"))
         total_cap = num(quote.get("f20"))
@@ -211,6 +293,7 @@ def main() -> None:
                 "上市状态": status,
                 "上市日期": listing_date,
                 "申购日期": apply_date,
+                "次日日期": second_date,
                 "行业": row.get("INDUSTRY_NAME"),
                 "发行价": round_or_none(issue_price, 2),
                 "发行总量_万股": round_or_none(issue_num_wan, 2),
@@ -227,6 +310,9 @@ def main() -> None:
                 "首日开盘价": round_or_none(first_open, 2),
                 "首日收盘价": round_or_none(first_close, 2),
                 "首日最高价": round_or_none(first_high, 2),
+                "首日最低价": round_or_none(first_low, 2),
+                "次日最高价": round_or_none(second_high, 2),
+                "次日最低价": round_or_none(second_low, 2),
                 "首日涨跌幅_pct": round_or_none(num(row.get("LD_CLOSE_CHANGE")), 2),
                 "发行市盈率": round_or_none(num(row.get("AFTER_ISSUE_PE")), 2),
                 "保荐机构": row.get("RECOMMEND_ORG"),
@@ -289,6 +375,10 @@ def main() -> None:
         "首日开盘价(元)",
         "首日收盘价(元)",
         "首日最高价(元)",
+        "首日最低价(元)",
+        "次日日期",
+        "次日最高价(元)",
+        "次日最低价(元)",
         "首日涨跌幅(%)",
         "发行市盈率",
         "保荐机构",
@@ -311,6 +401,9 @@ def main() -> None:
         "首日开盘价(元)": "首日开盘价",
         "首日收盘价(元)": "首日收盘价",
         "首日最高价(元)": "首日最高价",
+        "首日最低价(元)": "首日最低价",
+        "次日最高价(元)": "次日最高价",
+        "次日最低价(元)": "次日最低价",
         "首日涨跌幅(%)": "首日涨跌幅_pct",
         "发行市盈率": "发行市盈率",
     }

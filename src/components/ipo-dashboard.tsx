@@ -342,7 +342,7 @@ export function IpoDashboard({ data }: Props) {
         </Tabs>
 
         <p className="pb-6 text-xs leading-5 text-muted-foreground">
-          {data.note} 交易记录只存在你的浏览器本地。理论最大收益率 =（首日最高价 − 发行价）/ 发行价；实际收益率 = 次日收益 /（买入价 × 股数）。
+          {data.note} 交易记录只存在你的浏览器本地。理论最高 =（次日最高 − 首日最低）/ 首日最低；理论最低 =（次日最低 − 首日最高）/ 首日最高；实际收益率 = 次日收益 /（买入价 × 股数）。
         </p>
       </main>
 
@@ -503,6 +503,10 @@ function IpoDetail({
     ["首日开盘价", item.首日开盘价 ? `${formatNumber(item.首日开盘价)} 元` : "—"],
     ["首日收盘价", item.首日收盘价 ? `${formatNumber(item.首日收盘价)} 元` : "—"],
     ["首日最高价", item.首日最高价 ? `${formatNumber(item.首日最高价)} 元` : "—"],
+    ["首日最低价", item.首日最低价 ? `${formatNumber(item.首日最低价)} 元` : "—"],
+    ["次日日期", formatDate(item.次日日期)],
+    ["次日最高价", item.次日最高价 ? `${formatNumber(item.次日最高价)} 元` : "—"],
+    ["次日最低价", item.次日最低价 ? `${formatNumber(item.次日最低价)} 元` : "—"],
     ["首日涨跌幅", signedPct(item.首日涨跌幅_pct)],
     ["发行市盈率", item.发行市盈率 ? `${formatNumber(item.发行市盈率)} 倍` : "—"],
     ["保荐机构", item.保荐机构 ?? "—"],

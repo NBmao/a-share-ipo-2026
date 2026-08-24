@@ -30,6 +30,10 @@ export type IpoItem = {
   首日开盘价: number | null;
   首日收盘价: number | null;
   首日最高价: number | null;
+  首日最低价: number | null;
+  次日日期: string | null;
+  次日最高价: number | null;
+  次日最低价: number | null;
   首日涨跌幅_pct: number | null;
   发行市盈率: number | null;
   保荐机构: string | null;
@@ -109,12 +113,34 @@ export function firstDayHigh(item: IpoItem): number | null {
   return prices.length ? Math.max(...prices) : null;
 }
 
-/** 理论最大收益率：发行价打到首日最高价。 */
+export function firstDayLow(item: IpoItem): number | null {
+  if (item.首日最低价 != null) return item.首日最低价;
+  const prices = [item.首日开盘价, item.首日收盘价].filter(
+    (value): value is number => value != null,
+  );
+  return prices.length ? Math.min(...prices) : null;
+}
+
+/**
+ * 理论最大收益率：首日最低价买入，次日最高价卖出。
+ */
 export function theoreticalMaxPct(item: IpoItem | null | undefined): number | null {
   if (!item) return null;
-  const high = firstDayHigh(item);
-  if (item.发行价 == null || item.发行价 <= 0 || high == null) return null;
-  return ((high - item.发行价) / item.发行价) * 100;
+  const buy = firstDayLow(item);
+  const sell = item.次日最高价;
+  if (buy == null || buy <= 0 || sell == null) return null;
+  return ((sell - buy) / buy) * 100;
+}
+
+/**
+ * 理论最低收益率：首日最高价买入，次日最低价卖出。
+ */
+export function theoreticalMinPct(item: IpoItem | null | undefined): number | null {
+  if (!item) return null;
+  const buy = firstDayHigh(item);
+  const sell = item.次日最低价;
+  if (buy == null || buy <= 0 || sell == null) return null;
+  return ((sell - buy) / buy) * 100;
 }
 
 export function formatYuan(value: number | null | undefined, digits = 2): string {

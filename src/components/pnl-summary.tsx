@@ -5,7 +5,9 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   Legend,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -45,17 +47,40 @@ const DIMENSIONS: Array<{ key: DimensionKey; label: string }> = [
   { key: "board", label: "按板块" },
 ];
 
+type ChartDatum = {
+  label: string;
+  code: string;
+  theoryMin: number;
+  theoryMax: number;
+  actual: number | null;
+  traded: boolean;
+  /** invisible stack base for dashed range bar */
+  rangeBase: number;
+  /** dashed range height */
+  rangeSpan: number;
+};
+
 export function PnlSummary({ items, trades }: Props) {
   const [dimension, setDimension] = useState<DimensionKey>("month");
   const summary = useMemo(() => totals(trades), [trades]);
   const buckets = useMemo(() => groupTrades(trades, dimension), [dimension, trades]);
   const rows = useMemo(() => chartRows(items, trades), [items, trades]);
-  const chartData = rows.map((row) => ({
-    ...row,
-    label: row.name,
-    theory: roundPct(row.theory),
-    actual: row.actual == null ? null : roundPct(row.actual),
-  }));
+  const chartData: ChartDatum[] = rows.map((row) => {
+    const theoryMin = roundPct(row.theoryMin) ?? 0;
+    const theoryMax = roundPct(row.theoryMax) ?? 0;
+    const lo = Math.min(theoryMin, theoryMax);
+    const hi = Math.max(theoryMin, theoryMax);
+    return {
+      label: row.name,
+      code: row.code,
+      theoryMin,
+      theoryMax,
+      actual: row.actual == null ? null : roundPct(row.actual),
+      traded: row.traded,
+      rangeBase: lo,
+      rangeSpan: hi - lo,
+    };
+  });
 
   if (trades.length === 0) {
     return (
@@ -63,7 +88,7 @@ export function PnlSummary({ items, trades }: Props) {
         <CardContent className="space-y-2">
           <p className="text-base font-medium">还没有可汇总的收益</p>
           <p className="text-sm text-muted-foreground">
-            先在「交易记账」里录入至少一笔首日买入、次日卖出，这里就会按月、按板块汇总，并对比理论最大涨幅。
+            先在「交易记账」里录入至少一笔首日买入、次日卖出，这里就会按月、按板块汇总，并对比理论收益区间。
           </p>
         </CardContent>
       </Card>
@@ -184,18 +209,19 @@ export function PnlSummary({ items, trades }: Props) {
       <Card className="bg-white shadow-sm">
         <CardContent className="flex flex-col gap-3">
           <div>
-            <h2 className="text-base font-semibold">理论最大 vs 实际收益率</h2>
+            <h2 className="text-base font-semibold">理论收益区间 vs 实际收益率</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              横轴按上市日期排列每只新股。空心柱是发行价打到首日最高价的理论最大涨幅，实心柱是你这笔交易的实际收益率。
+              虚线柱是理论区间：下沿 = 首日最高买、次日最低卖；上沿 = 首日最低买、次日最高卖。
+              实心柱是你的实际收益率。
             </p>
           </div>
           <div className="w-full overflow-x-auto">
-            <div style={{ width: Math.max(720, chartData.length * 36), height: 380 }}>
+            <div style={{ width: Math.max(720, chartData.length * 42), height: 400 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={chartData}
                   margin={{ top: 8, right: 8, left: 8, bottom: 64 }}
-                  barCategoryGap="18%"
+                  barCategoryGap="22%"
                 >
                   <CartesianGrid vertical={false} stroke="#e2e8f0" />
                   <XAxis
@@ -211,17 +237,21 @@ export function PnlSummary({ items, trades }: Props) {
                     tick={{ fontSize: 11, fill: "#475569" }}
                     width={52}
                   />
+                  <ReferenceLine y={0} stroke="#94a3b8" />
                   <Tooltip
                     content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null;
-                      const row = payload[0]?.payload as (typeof chartData)[number];
+                      const row = payload[0]?.payload as ChartDatum;
                       return (
                         <div className="rounded-lg border bg-white px-3 py-2 text-xs shadow-md">
                           <p className="font-medium">
                             {label} {row.code}
                           </p>
                           <p className="mt-1 text-slate-600">
-                            理论最大 {signedPct(row.theory)}
+                            理论最低 {signedPct(row.theoryMin)}
+                          </p>
+                          <p className="text-slate-600">
+                            理论最高 {signedPct(row.theoryMax)}
                           </p>
                           <p className={changeClass(row.actual)}>
                             实际收益 {row.actual == null ? "未交易" : signedPct(row.actual)}
@@ -232,20 +262,45 @@ export function PnlSummary({ items, trades }: Props) {
                   />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Bar
-                    dataKey="theory"
-                    name="理论最大收益率"
-                    fill="rgba(15, 39, 68, 0.04)"
+                    dataKey="rangeBase"
+                    stackId="theory"
+                    fill="transparent"
+                    legendType="none"
+                    maxBarSize={18}
+                    isAnimationActive={false}
+                  />
+                  <Bar
+                    dataKey="rangeSpan"
+                    name="理论收益区间"
+                    stackId="theory"
+                    fill="rgba(100, 116, 139, 0.08)"
                     stroke="#64748b"
-                    strokeWidth={1.6}
-                    maxBarSize={22}
+                    strokeWidth={1.5}
+                    strokeDasharray="4 3"
+                    maxBarSize={18}
+                    isAnimationActive={false}
+                    legendType="rect"
                   />
                   <Bar
                     dataKey="actual"
                     name="实际收益率"
                     fill="#0f2744"
-                    maxBarSize={22}
+                    maxBarSize={18}
                     radius={[2, 2, 0, 0]}
-                  />
+                  >
+                    {chartData.map((entry) => (
+                      <Cell
+                        key={entry.code}
+                        fill={
+                          entry.actual == null
+                            ? "transparent"
+                            : entry.actual >= 0
+                              ? "#0f2744"
+                              : "#0f766e"
+                        }
+                      />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </div>

@@ -1,6 +1,7 @@
 import {
   marketGroup,
   theoreticalMaxPct,
+  theoreticalMinPct,
   type Board,
   type IpoItem,
 } from "@/lib/ipo";
@@ -107,7 +108,8 @@ export type ChartRow = {
   code: string;
   name: string;
   listingDate: string;
-  theory: number | null;
+  theoryMin: number | null;
+  theoryMax: number | null;
   actual: number | null;
   traded: boolean;
 };
@@ -121,7 +123,12 @@ export function chartRows(items: IpoItem[], trades: Trade[]): ChartRow[] {
   }
 
   return items
-    .filter((item) => item.上市日期 && theoreticalMaxPct(item) != null)
+    .filter(
+      (item) =>
+        item.上市日期 &&
+        theoreticalMaxPct(item) != null &&
+        theoreticalMinPct(item) != null,
+    )
     .map((item) => {
       const mine = byCode.get(item.股票代码) ?? [];
       const cost = mine.reduce((sum, trade) => sum + tradeCost(trade), 0);
@@ -130,7 +137,8 @@ export function chartRows(items: IpoItem[], trades: Trade[]): ChartRow[] {
         code: item.股票代码,
         name: item.股票简称,
         listingDate: item.上市日期 ?? "",
-        theory: theoreticalMaxPct(item),
+        theoryMin: theoreticalMinPct(item),
+        theoryMax: theoreticalMaxPct(item),
         actual: mine.length && cost > 0 ? (pnl / cost) * 100 : null,
         traded: mine.length > 0,
       };
