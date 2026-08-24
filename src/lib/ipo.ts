@@ -29,6 +29,7 @@ export type IpoItem = {
   涨跌幅_pct: number | null;
   首日开盘价: number | null;
   首日收盘价: number | null;
+  首日最高价: number | null;
   首日涨跌幅_pct: number | null;
   发行市盈率: number | null;
   保荐机构: string | null;
@@ -91,6 +92,50 @@ export const BOARD_STYLES: Record<Board, string> = {
   创业板: "bg-teal-50 text-teal-700 ring-teal-100",
   科创板: "bg-violet-50 text-violet-700 ring-violet-100",
 };
+
+export type MarketGroup = "主板" | "创业板" | "科创板";
+
+export function marketGroup(board: Board): MarketGroup {
+  if (board === "科创板") return "科创板";
+  if (board === "创业板") return "创业板";
+  return "主板";
+}
+
+export function firstDayHigh(item: IpoItem): number | null {
+  if (item.首日最高价 != null) return item.首日最高价;
+  const prices = [item.首日开盘价, item.首日收盘价].filter(
+    (value): value is number => value != null,
+  );
+  return prices.length ? Math.max(...prices) : null;
+}
+
+/** 理论最大收益率：发行价打到首日最高价。 */
+export function theoreticalMaxPct(item: IpoItem | null | undefined): number | null {
+  if (!item) return null;
+  const high = firstDayHigh(item);
+  if (item.发行价 == null || item.发行价 <= 0 || high == null) return null;
+  return ((high - item.发行价) / item.发行价) * 100;
+}
+
+export function formatYuan(value: number | null | undefined, digits = 2): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  return `${formatNumber(value, digits)} 元`;
+}
+
+export function signedPct(value: number | null | undefined, digits = 2): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "—";
+  const abs = formatNumber(Math.abs(value), digits);
+  if (value > 0) return `+${abs}%`;
+  if (value < 0) return `-${abs}%`;
+  return `${abs}%`;
+}
+
+export function changeClass(value: number | null | undefined): string {
+  if (value === null || value === undefined || value === 0) {
+    return "text-muted-foreground";
+  }
+  return value > 0 ? "text-rose-600" : "text-emerald-600";
+}
 
 export const STATUS_STYLES: Record<ListingStatus, string> = {
   已上市: "bg-emerald-50 text-emerald-700 ring-emerald-100",

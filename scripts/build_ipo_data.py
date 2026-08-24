@@ -176,6 +176,18 @@ def main() -> None:
         if issue_float_yi is None and issue_price and issue_num_wan:
             issue_float_yi = issue_price * issue_num_wan / 10000.0
 
+        first_open = num(row.get("OPEN_PRICE"))
+        first_close = num(row.get("CLOSE_PRICE"))
+        high_chg = num(row.get("LD_HIGH_CHANG"))
+        first_high = (
+            issue_price * (1 + high_chg / 100.0)
+            if issue_price and high_chg is not None
+            else None
+        )
+        if first_high is None:
+            day_prices = [p for p in (first_open, first_close) if p is not None]
+            first_high = max(day_prices) if day_prices else None
+
         last_price = num(quote.get("f2"))
         total_cap = num(quote.get("f20"))
         float_cap = num(quote.get("f21"))
@@ -212,8 +224,9 @@ def main() -> None:
                 "当前总市值_亿元": round_or_none(total_cap_yi, 4),
                 "最新价": round_or_none(last_price, 2),
                 "涨跌幅_pct": round_or_none(num(quote.get("f3")), 2),
-                "首日开盘价": round_or_none(num(row.get("OPEN_PRICE")), 2),
-                "首日收盘价": round_or_none(num(row.get("CLOSE_PRICE")), 2),
+                "首日开盘价": round_or_none(first_open, 2),
+                "首日收盘价": round_or_none(first_close, 2),
+                "首日最高价": round_or_none(first_high, 2),
                 "首日涨跌幅_pct": round_or_none(num(row.get("LD_CLOSE_CHANGE")), 2),
                 "发行市盈率": round_or_none(num(row.get("AFTER_ISSUE_PE")), 2),
                 "保荐机构": row.get("RECOMMEND_ORG"),
@@ -275,6 +288,7 @@ def main() -> None:
         "涨跌幅(%)",
         "首日开盘价(元)",
         "首日收盘价(元)",
+        "首日最高价(元)",
         "首日涨跌幅(%)",
         "发行市盈率",
         "保荐机构",
@@ -296,6 +310,7 @@ def main() -> None:
         "涨跌幅(%)": "涨跌幅_pct",
         "首日开盘价(元)": "首日开盘价",
         "首日收盘价(元)": "首日收盘价",
+        "首日最高价(元)": "首日最高价",
         "首日涨跌幅(%)": "首日涨跌幅_pct",
         "发行市盈率": "发行市盈率",
     }

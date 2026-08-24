@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "2026年主板创业板科创板新股",
+  title: "2026新股交易记账",
   description:
-    "按上市日期排序的2026年A股新股列表，已补齐股票代码、发行价、发行量与发行流通值。",
+    "2026年主板、创业板、科创板新股列表与首日买入、次日卖出收益记账。",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -1,7 +1,15 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
-import { Download, Search, TrendingUp, Wallet, CalendarDays } from "lucide-react";
+import {
+  Download,
+  Search,
+  TrendingUp,
+  Wallet,
+  CalendarDays,
+  NotebookPen,
+  ChartColumn,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,14 +29,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PnlSummary } from "@/components/pnl-summary";
+import { TradeJournal } from "@/components/trade-journal";
+import { useTrades } from "@/hooks/use-trades";
 import {
   BOARD_STYLES,
   BOARDS,
   STATUS_OPTIONS,
   STATUS_STYLES,
+  changeClass,
   formatDate,
   formatNumber,
   formatYi,
+  signedPct,
   sum,
   type Board,
   type IpoItem,
@@ -38,25 +52,16 @@ import {
 import { cn } from "@/lib/utils";
 
 type Props = { data: IpoPayload };
-
-function changeClass(value: number | null): string {
-  if (value === null || value === 0) return "text-muted-foreground";
-  return value > 0 ? "text-rose-600" : "text-emerald-600";
-}
-
-function signed(value: number | null, digits = 2): string {
-  if (value === null) return "—";
-  const abs = formatNumber(Math.abs(value), digits);
-  if (value > 0) return `+${abs}`;
-  if (value < 0) return `-${abs}`;
-  return abs;
-}
+type AppTab = "list" | "journal" | "summary";
 
 export function IpoDashboard({ data }: Props) {
+  const [tab, setTab] = useState<AppTab>("list");
   const [query, setQuery] = useState("");
   const [board, setBoard] = useState<"全部" | Board>("全部");
   const [status, setStatus] = useState<(typeof STATUS_OPTIONS)[number]>("全部");
   const [selected, setSelected] = useState<IpoItem | null>(null);
+  const [prefillCode, setPrefillCode] = useState<string | null>(null);
+  const { trades, upsert, remove } = useTrades();
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -96,8 +101,8 @@ export function IpoDashboard({ data }: Props) {
                 主板 / 创业板 / 科创板新股
               </h1>
               <p className="max-w-2xl text-sm leading-6 text-slate-300">
-                按上市日期排序，已补齐股票代码、发行价、发行量与发行流通值。
-                发行流通值 = 网上发行股数 × 发行价。数据截至 {data.asOf}，不含北交所。
+                按上市日期排序的新股表，可记账首日买入、次日卖出，再按月或板块汇总收益。
+                数据截至 {data.asOf}，不含北交所。
               </p>
             </div>
             <a
@@ -141,6 +146,31 @@ export function IpoDashboard({ data }: Props) {
       </header>
 
       <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8">
+        <Tabs
+          value={tab}
+          onValueChange={(value) => {
+            if (value === "list" || value === "journal" || value === "summary") {
+              setTab(value);
+            }
+          }}
+          className="gap-4"
+        >
+          <TabsList className="h-auto w-full flex-wrap justify-start bg-white p-1 shadow-sm">
+            <TabsTrigger value="list" className="px-3">
+              <Search className="size-3.5" />
+              新股列表
+            </TabsTrigger>
+            <TabsTrigger value="journal" className="px-3">
+              <NotebookPen className="size-3.5" />
+              交易记账
+            </TabsTrigger>
+            <TabsTrigger value="summary" className="px-3">
+              <ChartColumn className="size-3.5" />
+              收益汇总
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="list" className="flex flex-col gap-4">
         <Card className="bg-white/80 shadow-sm">
           <CardContent className="flex flex-col gap-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -282,9 +312,7 @@ export function IpoDashboard({ data }: Props) {
                               changeClass(item.涨跌幅_pct),
                             )}
                           >
-                            {item.涨跌幅_pct === null
-                              ? ""
-                              : `${signed(item.涨跌幅_pct)}%`}
+                            {item.涨跌幅_pct === null ? "" : signedPct(item.涨跌幅_pct)}
                           </span>
                         </div>
                       </TableCell>
@@ -295,10 +323,26 @@ export function IpoDashboard({ data }: Props) {
             </Card>
           </>
         )}
+          </TabsContent>
+
+          <TabsContent value="journal">
+            <TradeJournal
+              items={data.items}
+              trades={trades}
+              prefillCode={prefillCode}
+              onPrefillConsumed={() => setPrefillCode(null)}
+              onSave={upsert}
+              onDelete={remove}
+            />
+          </TabsContent>
+
+          <TabsContent value="summary">
+            <PnlSummary items={data.items} trades={trades} />
+          </TabsContent>
+        </Tabs>
 
         <p className="pb-6 text-xs leading-5 text-muted-foreground">
-          {data.note} 原始桌面文件未随仓库上传，本表按 2026 年公开新股数据重建。
-          未定价新股的募集资金为招股预计值。点击一行可查看保荐机构与主营业务。
+          {data.note} 交易记录只存在你的浏览器本地。理论最大收益率 =（首日最高价 − 发行价）/ 发行价；实际收益率 = 次日收益 /（买入价 × 股数）。
         </p>
       </main>
 
@@ -309,7 +353,16 @@ export function IpoDashboard({ data }: Props) {
         }}
       >
         <SheetContent side="right" className="w-full sm:max-w-md">
-          {selected ? <IpoDetail item={selected} /> : null}
+          {selected ? (
+            <IpoDetail
+              item={selected}
+              onRecord={() => {
+                setPrefillCode(selected.股票代码);
+                setSelected(null);
+                setTab("journal");
+              }}
+            />
+          ) : null}
         </SheetContent>
       </Sheet>
     </div>
@@ -419,7 +472,13 @@ function EmptyState({
   );
 }
 
-function IpoDetail({ item }: { item: IpoItem }) {
+function IpoDetail({
+  item,
+  onRecord,
+}: {
+  item: IpoItem;
+  onRecord: () => void;
+}) {
   const rows: Array<[string, string]> = [
     ["股票代码", item.股票代码],
     ["公司全称", item.公司全称 ?? "—"],
@@ -440,10 +499,11 @@ function IpoDetail({ item }: { item: IpoItem }) {
     ["当前流通市值", formatYi(item.当前流通市值_亿元)],
     ["当前总市值", formatYi(item.当前总市值_亿元)],
     ["最新价", item.最新价 ? `${formatNumber(item.最新价)} 元` : "—"],
-    ["涨跌幅", item.涨跌幅_pct === null ? "—" : `${signed(item.涨跌幅_pct)}%`],
+    ["涨跌幅", signedPct(item.涨跌幅_pct)],
     ["首日开盘价", item.首日开盘价 ? `${formatNumber(item.首日开盘价)} 元` : "—"],
     ["首日收盘价", item.首日收盘价 ? `${formatNumber(item.首日收盘价)} 元` : "—"],
-    ["首日涨跌幅", item.首日涨跌幅_pct === null ? "—" : `${signed(item.首日涨跌幅_pct)}%`],
+    ["首日最高价", item.首日最高价 ? `${formatNumber(item.首日最高价)} 元` : "—"],
+    ["首日涨跌幅", signedPct(item.首日涨跌幅_pct)],
     ["发行市盈率", item.发行市盈率 ? `${formatNumber(item.发行市盈率)} 倍` : "—"],
     ["保荐机构", item.保荐机构 ?? "—"],
   ];
@@ -478,6 +538,9 @@ function IpoDetail({ item }: { item: IpoItem }) {
             <p className="mt-1 text-sm leading-6">{item.主营业务}</p>
           </div>
         ) : null}
+        <Button type="button" className="mt-2" onClick={onRecord}>
+          记一笔首日买入
+        </Button>
       </div>
     </>
   );
