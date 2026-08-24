@@ -29,7 +29,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PnlSummary } from "@/components/pnl-summary";
 import { TradeJournal } from "@/components/trade-journal";
 import { useTrades } from "@/hooks/use-trades";
@@ -146,31 +145,46 @@ export function IpoDashboard({ data }: Props) {
       </header>
 
       <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8">
-        <Tabs
-          value={tab}
-          onValueChange={(value) => {
-            if (value === "list" || value === "journal" || value === "summary") {
-              setTab(value);
-            }
-          }}
-          className="gap-4"
+        <div
+          role="tablist"
+          aria-label="功能页签"
+          className="flex w-full flex-wrap gap-1 rounded-lg bg-white p-1 shadow-sm ring-1 ring-foreground/10"
         >
-          <TabsList className="h-auto w-full flex-wrap justify-start bg-white p-1 shadow-sm">
-            <TabsTrigger value="list" className="px-3">
-              <Search className="size-3.5" />
-              新股列表
-            </TabsTrigger>
-            <TabsTrigger value="journal" className="px-3">
-              <NotebookPen className="size-3.5" />
-              交易记账
-            </TabsTrigger>
-            <TabsTrigger value="summary" className="px-3">
-              <ChartColumn className="size-3.5" />
-              收益汇总
-            </TabsTrigger>
-          </TabsList>
+          {(
+            [
+              { id: "list", label: "新股列表", icon: Search },
+              { id: "journal", label: "交易记账", icon: NotebookPen },
+              { id: "summary", label: "收益汇总", icon: ChartColumn },
+            ] as const
+          ).map((item) => {
+            const Icon = item.icon;
+            const active = tab === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => {
+                  setSelected(null);
+                  setTab(item.id);
+                }}
+                className={cn(
+                  "inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors",
+                  active
+                    ? "bg-[#0f2744] text-white shadow-sm"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <Icon className="size-3.5" />
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
 
-          <TabsContent value="list" className="flex flex-col gap-4">
+        {tab === "list" ? (
+        <div className="flex flex-col gap-4">
         <Card className="bg-white/80 shadow-sm">
           <CardContent className="flex flex-col gap-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -323,9 +337,10 @@ export function IpoDashboard({ data }: Props) {
             </Card>
           </>
         )}
-          </TabsContent>
+        </div>
+        ) : null}
 
-          <TabsContent value="journal">
+        {tab === "journal" ? (
             <TradeJournal
               items={data.items}
               trades={trades}
@@ -334,12 +349,11 @@ export function IpoDashboard({ data }: Props) {
               onSave={upsert}
               onDelete={remove}
             />
-          </TabsContent>
+        ) : null}
 
-          <TabsContent value="summary">
+        {tab === "summary" ? (
             <PnlSummary items={data.items} trades={trades} />
-          </TabsContent>
-        </Tabs>
+        ) : null}
 
         <p className="pb-6 text-xs leading-5 text-muted-foreground">
           {data.note} 交易记录只存在你的浏览器本地。理论最高 =（次日最高 − 首日最低）/ 首日最低；理论最低 =（次日最低 − 首日最高）/ 首日最高；实际收益率 = 次日收益 /（买入价 × 股数）。
