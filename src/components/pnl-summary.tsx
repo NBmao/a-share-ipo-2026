@@ -3,12 +3,12 @@
 import { useMemo, useState } from "react";
 import {
   Bar,
-  BarChart,
   CartesianGrid,
-  Cell,
+  ComposedChart,
   Legend,
   ReferenceLine,
   ResponsiveContainer,
+  Scatter,
   Tooltip,
   XAxis,
   YAxis,
@@ -43,6 +43,7 @@ type Props = { items: IpoItem[]; trades: Trade[] };
 
 const DIMENSIONS: Array<{ key: DimensionKey; label: string }> = [
   { key: "month", label: "按月" },
+  { key: "stock", label: "按股票" },
   { key: "market", label: "主板 / 创业板 / 科创板" },
   { key: "board", label: "按板块" },
 ];
@@ -54,9 +55,7 @@ type ChartDatum = {
   theoryMax: number;
   actual: number | null;
   traded: boolean;
-  /** invisible stack base for dashed range bar */
   rangeBase: number;
-  /** dashed range height */
   rangeSpan: number;
 };
 
@@ -88,7 +87,7 @@ export function PnlSummary({ items, trades }: Props) {
         <CardContent className="space-y-2">
           <p className="text-base font-medium">还没有可汇总的收益</p>
           <p className="text-sm text-muted-foreground">
-            先在「交易记账」里录入至少一笔首日买入、次日卖出，这里就会按月、按板块汇总，并对比理论收益区间。
+            先在「交易记账」里录入至少一笔首日买入、次日卖出，这里就会按月、按股票或板块汇总，并对比理论收益区间。
           </p>
         </CardContent>
       </Card>
@@ -120,7 +119,7 @@ export function PnlSummary({ items, trades }: Props) {
             <div>
               <h2 className="text-base font-semibold">收益分维</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                按上市月份或板块看总收益、本金和收益率。
+                按月份、股票、板块查看总收益、本金和收益率；按股票时按上市日期排序。
               </p>
             </div>
             <div className="flex w-full gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:w-auto sm:flex-wrap sm:overflow-visible sm:pb-0">
@@ -176,72 +175,72 @@ export function PnlSummary({ items, trades }: Props) {
             ))}
           </div>
           <div className="hidden overflow-x-auto sm:block">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-slate-50 hover:bg-slate-50">
-                <TableHead>维度</TableHead>
-                <TableHead className="text-right">笔数</TableHead>
-                <TableHead className="text-right">本金</TableHead>
-                <TableHead className="text-right">收益</TableHead>
-                <TableHead className="text-right">收益率</TableHead>
-                <TableHead className="text-right">胜率</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {buckets.map((bucket) => (
-                <TableRow key={bucket.key}>
-                  <TableCell className="font-medium">{bucket.label}</TableCell>
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-slate-50 hover:bg-slate-50">
+                  <TableHead>维度</TableHead>
+                  <TableHead className="text-right">笔数</TableHead>
+                  <TableHead className="text-right">本金</TableHead>
+                  <TableHead className="text-right">收益</TableHead>
+                  <TableHead className="text-right">收益率</TableHead>
+                  <TableHead className="text-right">胜率</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {buckets.map((bucket) => (
+                  <TableRow key={bucket.key}>
+                    <TableCell className="font-medium">{bucket.label}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {bucket.trades}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {formatYuan(bucket.cost, 0)}
+                    </TableCell>
+                    <TableCell
+                      className={cn(
+                        "text-right font-mono tabular-nums",
+                        changeClass(bucket.pnl),
+                      )}
+                    >
+                      {formatYuan(bucket.pnl, 0)}
+                    </TableCell>
+                    <TableCell
+                      className={cn(
+                        "text-right font-mono tabular-nums",
+                        changeClass(bucket.returnPct),
+                      )}
+                    >
+                      {signedPct(bucket.returnPct)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {bucket.trades
+                        ? `${formatNumber((bucket.wins / bucket.trades) * 100, 0)}%`
+                        : "—"}
+                    </TableCell>
+                  </TableRow>
+                ))}
+                <TableRow className="bg-slate-50 font-medium">
+                  <TableCell>合计</TableCell>
                   <TableCell className="text-right font-mono tabular-nums">
-                    {bucket.trades}
+                    {summary.trades}
                   </TableCell>
                   <TableCell className="text-right font-mono tabular-nums">
-                    {formatYuan(bucket.cost, 0)}
+                    {formatYuan(summary.cost, 0)}
                   </TableCell>
-                  <TableCell
-                    className={cn(
-                      "text-right font-mono tabular-nums",
-                      changeClass(bucket.pnl),
-                    )}
-                  >
-                    {formatYuan(bucket.pnl, 0)}
+                  <TableCell className={cn("text-right font-mono tabular-nums", changeClass(summary.pnl))}>
+                    {formatYuan(summary.pnl, 0)}
                   </TableCell>
-                  <TableCell
-                    className={cn(
-                      "text-right font-mono tabular-nums",
-                      changeClass(bucket.returnPct),
-                    )}
-                  >
-                    {signedPct(bucket.returnPct)}
+                  <TableCell className={cn("text-right font-mono tabular-nums", changeClass(summary.returnPct))}>
+                    {signedPct(summary.returnPct)}
                   </TableCell>
                   <TableCell className="text-right font-mono tabular-nums">
-                    {bucket.trades
-                      ? `${formatNumber((bucket.wins / bucket.trades) * 100, 0)}%`
+                    {summary.trades
+                      ? `${formatNumber((summary.wins / summary.trades) * 100, 0)}%`
                       : "—"}
                   </TableCell>
                 </TableRow>
-              ))}
-              <TableRow className="bg-slate-50 font-medium">
-                <TableCell>合计</TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
-                  {summary.trades}
-                </TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
-                  {formatYuan(summary.cost, 0)}
-                </TableCell>
-                <TableCell className={cn("text-right font-mono tabular-nums", changeClass(summary.pnl))}>
-                  {formatYuan(summary.pnl, 0)}
-                </TableCell>
-                <TableCell className={cn("text-right font-mono tabular-nums", changeClass(summary.returnPct))}>
-                  {signedPct(summary.returnPct)}
-                </TableCell>
-                <TableCell className="text-right font-mono tabular-nums">
-                  {summary.trades
-                    ? `${formatNumber((summary.wins / summary.trades) * 100, 0)}%`
-                    : "—"}
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>
@@ -251,8 +250,7 @@ export function PnlSummary({ items, trades }: Props) {
           <div>
             <h2 className="text-base font-semibold">理论收益区间 vs 实际收益率</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              虚线柱是理论区间：左沿 = 首日最高买、次日最低卖；右沿 = 首日最低买、次日最高卖。
-              实心柱是你的实际收益率。可上下滚动查看。
+              虚线柱是理论区间。彩色圆点是实际收益率：盈利红点、亏损绿点。可上下滚动查看。
             </p>
           </div>
           <div className="w-full overflow-x-auto">
@@ -261,7 +259,7 @@ export function PnlSummary({ items, trades }: Props) {
               style={{ height: Math.max(360, chartData.length * 36 + 72) }}
             >
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart
+                <ComposedChart
                   layout="vertical"
                   data={chartData}
                   margin={{ top: 8, right: 16, left: 4, bottom: 8 }}
@@ -284,7 +282,10 @@ export function PnlSummary({ items, trades }: Props) {
                   <Tooltip
                     content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null;
-                      const row = payload[0]?.payload as ChartDatum;
+                      const row = (payload[0]?.payload ?? payload.find((p) => p.payload)?.payload) as
+                        | ChartDatum
+                        | undefined;
+                      if (!row) return null;
                       return (
                         <div className="rounded-lg border bg-white px-3 py-2 text-xs shadow-md">
                           <p className="font-medium">
@@ -303,7 +304,25 @@ export function PnlSummary({ items, trades }: Props) {
                       );
                     }}
                   />
-                  <Legend wrapperStyle={{ fontSize: 12 }} />
+                  <Legend
+                    wrapperStyle={{ fontSize: 12 }}
+                    content={() => (
+                      <div className="flex flex-wrap items-center justify-center gap-4 pt-2 text-xs text-slate-600">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="inline-block h-2.5 w-4 rounded-sm border border-dashed border-slate-500 bg-slate-500/10" />
+                          理论收益区间
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="inline-block size-2.5 rounded-full bg-rose-600" />
+                          实际盈利
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className="inline-block size-2.5 rounded-full bg-emerald-600" />
+                          实际亏损
+                        </span>
+                      </div>
+                    )}
+                  />
                   <Bar
                     dataKey="rangeBase"
                     stackId="theory"
@@ -322,29 +341,41 @@ export function PnlSummary({ items, trades }: Props) {
                     strokeDasharray="4 3"
                     maxBarSize={14}
                     isAnimationActive={false}
-                    legendType="rect"
+                    legendType="none"
                   />
-                  <Bar
+                  <Scatter
                     dataKey="actual"
                     name="实际收益率"
-                    fill="#0f2744"
-                    maxBarSize={14}
-                    radius={[0, 2, 2, 0]}
-                  >
-                    {chartData.map((entry) => (
-                      <Cell
-                        key={entry.code}
-                        fill={
-                          entry.actual == null
-                            ? "transparent"
-                            : entry.actual >= 0
-                              ? "#0f2744"
-                              : "#0f766e"
-                        }
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
+                    legendType="none"
+                    isAnimationActive={false}
+                    shape={(props) => {
+                      const { cx, cy, payload } = props as {
+                        cx?: number;
+                        cy?: number;
+                        payload?: ChartDatum;
+                      };
+                      if (
+                        cx == null ||
+                        cy == null ||
+                        payload?.actual == null ||
+                        Number.isNaN(payload.actual)
+                      ) {
+                        return <g />;
+                      }
+                      const fill = payload.actual >= 0 ? "#e11d48" : "#059669";
+                      return (
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={7}
+                          fill={fill}
+                          stroke="#ffffff"
+                          strokeWidth={2}
+                        />
+                      );
+                    }}
+                  />
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           </div>

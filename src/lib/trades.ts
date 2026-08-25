@@ -36,7 +36,7 @@ export function createTradeId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export type DimensionKey = "month" | "board" | "market";
+export type DimensionKey = "month" | "board" | "market" | "stock";
 
 export type PnlBucket = {
   key: string;
@@ -70,6 +70,8 @@ export function groupTrades(trades: Trade[], dimension: DimensionKey): PnlBucket
       key = trade.listingDate ? trade.listingDate.slice(0, 7) : "日期待公布";
     } else if (dimension === "board") {
       key = trade.board;
+    } else if (dimension === "stock") {
+      key = trade.code;
     } else {
       key = marketGroup(trade.board);
     }
@@ -78,26 +80,44 @@ export function groupTrades(trades: Trade[], dimension: DimensionKey): PnlBucket
     groups.set(key, list);
   }
 
-  const order =
-    dimension === "market"
-      ? ["主板", "创业板", "科创板"]
-      : dimension === "board"
-        ? ["沪市主板", "深市主板", "创业板", "科创板"]
-        : undefined;
+  let keys: string[];
+  if (dimension === "stock") {
+    keys = [...groups.keys()].sort((a, b) => {
+      const tradesA = groups.get(a) ?? [];
+      const tradesB = groups.get(b) ?? [];
+      const dateA =
+        tradesA.map((t) => t.listingDate).filter(Boolean).sort()[0] ?? "9999-12-31";
+      const dateB =
+        tradesB.map((t) => t.listingDate).filter(Boolean).sort()[0] ?? "9999-12-31";
+      if (dateA !== dateB) return dateA.localeCompare(dateB);
+      return a.localeCompare(b);
+    });
+  } else {
+    const order =
+      dimension === "market"
+        ? ["主板", "创业板", "科创板"]
+        : dimension === "board"
+          ? ["沪市主板", "深市主板", "创业板", "科创板"]
+          : undefined;
 
-  const keys = order
-    ? order.filter((key) => groups.has(key)).concat(
-        [...groups.keys()].filter((key) => !order.includes(key)).sort(),
-      )
-    : [...groups.keys()].sort();
+    keys = order
+      ? order.filter((key) => groups.has(key)).concat(
+          [...groups.keys()].filter((key) => !order.includes(key)).sort(),
+        )
+      : [...groups.keys()].sort();
+  }
 
-  return keys.map((key) =>
-    bucketFromTrades(
-      key,
-      dimension === "month" && /^\d{4}-\d{2}$/.test(key) ? `${key.replace("-", "年")}月` : key,
-      groups.get(key) ?? [],
-    ),
-  );
+  return keys.map((key) => {
+    const list = groups.get(key) ?? [];
+    let label = key;
+    if (dimension === "month" && /^\d{4}-\d{2}$/.test(key)) {
+      label = `${key.replace("-", "年")}月`;
+    } else if (dimension === "stock") {
+      const name = list[0]?.name ?? key;
+      label = `${name} ${key}`;
+    }
+    return bucketFromTrades(key, label, list);
+  });
 }
 
 export function totals(trades: Trade[]): PnlBucket {

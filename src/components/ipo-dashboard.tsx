@@ -5,9 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   Download,
   Search,
-  TrendingUp,
-  Wallet,
-  CalendarDays,
   NotebookPen,
   ChartColumn,
   RefreshCw,
@@ -43,7 +40,6 @@ import {
   formatNumber,
   formatYi,
   signedPct,
-  sum,
   type Board,
   type IpoItem,
   type IpoPayload,
@@ -107,131 +103,89 @@ export function IpoDashboard({ data }: Props) {
     });
   }, [board, data.items, query, status]);
 
-  const listed = data.items.filter((item) => item.上市状态 === "已上市");
-  const raiseTotal = sum(
-    data.items.filter((item) => item.发行价 !== null),
-    "募集资金_亿元",
-  );
-  const floatTotal = sum(
-    data.items.filter((item) => item.发行流通值_亿元 !== null),
-    "发行流通值_亿元",
-  );
-
   return (
     <div className="flex flex-1 flex-col">
-      <header className="border-b border-white/10 bg-[#0f2744] text-white">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 pt-[max(1.25rem,env(safe-area-inset-top))] pb-5 sm:gap-6 sm:px-6 sm:py-8 lg:px-8">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-2 sm:space-y-3">
-              <p className="text-[11px] font-medium tracking-[0.18em] text-sky-200/80 uppercase sm:text-xs sm:tracking-[0.22em]">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0f2744] text-white shadow-md">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-[11px] font-medium tracking-[0.16em] text-sky-200/80 uppercase">
                 2026 A-SHARE IPO
               </p>
-              <h1 className="text-xl font-semibold tracking-tight sm:text-3xl">
-                主板 / 创业板 / 科创板新股
-              </h1>
-              <p className="max-w-2xl text-sm leading-6 text-slate-300">
-                按上市日期排序，可记账与汇总。数据截至{" "}
-                <span className="font-medium text-white">{data.asOf}</span>
-                ，不含北交所。
+              <p className="truncate text-sm text-slate-300">
+                截至 <span className="font-medium text-white">{data.asOf}</span>
+                {refreshMessage ? ` · ${refreshMessage}` : ""}
               </p>
-              {refreshMessage ? (
-                <p className="text-xs text-sky-100/90">{refreshMessage}</p>
-              ) : null}
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+            <div className="flex shrink-0 gap-2">
               <Button
                 type="button"
-                size="lg"
+                size="sm"
                 variant="outline"
                 disabled={refreshing}
                 onClick={() => void refreshIpoData()}
-                className="h-11 border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+                className="h-10 border-white/30 bg-white/10 px-3 text-white hover:bg-white/20 hover:text-white"
               >
                 <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
-                {refreshing ? "刷新中…" : "刷新数据"}
+                <span className="hidden sm:inline">{refreshing ? "刷新中…" : "刷新"}</span>
               </Button>
               <a
                 href="/ipo-2026.xlsx"
                 download="2026新股_按上市日期.xlsx"
                 className={cn(
-                  buttonVariants({ size: "lg" }),
-                  "h-11 bg-white text-[#0f2744] hover:bg-sky-50",
+                  buttonVariants({ size: "sm" }),
+                  "h-10 bg-white px-3 text-[#0f2744] hover:bg-sky-50",
                 )}
+                aria-label="下载 Excel"
               >
                 <Download />
-                下载 Excel
+                <span className="hidden sm:inline">Excel</span>
               </a>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
-            <Stat
-              icon={<CalendarDays className="size-4" />}
-              label="新股只数"
-              value={`${data.count} 只`}
-              hint={`已上市 ${listed.length} · 待定 ${data.count - listed.length}`}
-            />
-            <Stat
-              icon={<Wallet className="size-4" />}
-              label="已定价募集"
-              value={`${formatNumber(raiseTotal, 1)} 亿`}
-              hint="有发行价公司合计"
-            />
-            <Stat
-              icon={<TrendingUp className="size-4" />}
-              label="发行流通值"
-              value={`${formatNumber(floatTotal, 1)} 亿`}
-              hint="网上发行 × 发行价"
-            />
-            <Stat
-              label="分板块"
-              value={`${data.boards["沪市主板"] + data.boards["深市主板"]} / ${data.boards["创业板"]} / ${data.boards["科创板"]}`}
-              hint="主板 / 创业 / 科创"
-            />
+
+          <div
+            role="tablist"
+            aria-label="功能页签"
+            className="grid grid-cols-3 gap-1.5 rounded-xl bg-black/20 p-1.5"
+          >
+            {(
+              [
+                { id: "list", label: "新股列表", icon: Search },
+                { id: "journal", label: "交易记账", icon: NotebookPen },
+                { id: "summary", label: "收益汇总", icon: ChartColumn },
+              ] as const
+            ).map((item) => {
+              const Icon = item.icon;
+              const active = tab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => {
+                    setSelected(null);
+                    setTab(item.id);
+                    setRefreshMessage(null);
+                  }}
+                  className={cn(
+                    "inline-flex h-12 min-h-12 items-center justify-center gap-2 rounded-lg px-2 text-sm font-semibold transition-colors sm:h-14 sm:text-base [&_svg]:pointer-events-none",
+                    active
+                      ? "bg-white text-[#0f2744] shadow-sm"
+                      : "text-slate-200 hover:bg-white/10 hover:text-white",
+                  )}
+                >
+                  <Icon className="size-4 sm:size-5" aria-hidden />
+                  {item.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </header>
 
       <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-3 px-3 py-4 sm:gap-4 sm:px-6 sm:py-6 lg:px-8">
-        <div
-          role="tablist"
-          aria-label="功能页签"
-          className="sticky top-0 z-20 -mx-3 flex w-[calc(100%+1.5rem)] gap-1 bg-[#f3f6fa]/95 px-3 py-2 backdrop-blur sm:relative sm:mx-0 sm:w-full sm:rounded-lg sm:bg-white sm:p-1 sm:shadow-sm sm:ring-1 sm:ring-foreground/10 sm:backdrop-blur-none"
-        >
-          {(
-            [
-              { id: "list", label: "新股列表", short: "列表", icon: Search },
-              { id: "journal", label: "交易记账", short: "记账", icon: NotebookPen },
-              { id: "summary", label: "收益汇总", short: "汇总", icon: ChartColumn },
-            ] as const
-          ).map((item) => {
-            const Icon = item.icon;
-            const active = tab === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => {
-                  setSelected(null);
-                  setTab(item.id);
-                  setRefreshMessage(null);
-                }}
-                className={cn(
-                  "relative z-10 inline-flex h-11 min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-sm font-medium transition-colors sm:h-9 sm:min-h-9 sm:px-3 [&_svg]:pointer-events-none",
-                  active
-                    ? "bg-[#0f2744] text-white shadow-sm"
-                    : "bg-white text-muted-foreground shadow-sm ring-1 ring-foreground/10 hover:bg-muted hover:text-foreground sm:bg-transparent sm:shadow-none sm:ring-0",
-                )}
-              >
-                <Icon className="size-3.5" aria-hidden />
-                <span className="sm:hidden">{item.short}</span>
-                <span className="hidden sm:inline">{item.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
         {tab === "list" ? (
         <div className="flex flex-col gap-4">
         <Card className="bg-white/80 shadow-sm">
@@ -418,31 +372,6 @@ export function IpoDashboard({ data }: Props) {
           </SheetContent>
         </Sheet>
       ) : null}
-    </div>
-  );
-}
-
-function Stat({
-  label,
-  value,
-  hint,
-  icon,
-}: {
-  label: string;
-  value: string;
-  hint: string;
-  icon?: ReactNode;
-}) {
-  return (
-    <div className="rounded-xl bg-white/8 p-3 ring-1 ring-white/10 sm:p-4">
-      <div className="flex items-center gap-1.5 text-[11px] text-sky-100/80 sm:gap-2 sm:text-xs">
-        {icon}
-        {label}
-      </div>
-      <p className="mt-1.5 text-base font-semibold tracking-tight sm:mt-2 sm:text-xl">
-        {value}
-      </p>
-      <p className="mt-1 text-[11px] leading-4 text-slate-300 sm:text-xs">{hint}</p>
     </div>
   );
 }
