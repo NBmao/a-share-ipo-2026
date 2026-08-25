@@ -47,3 +47,23 @@ cp data/2026新股_按上市日期.xlsx public/ipo-2026.xlsx
 - `public/ipo-2026.xlsx`：网页下载副本
 
 数据来源：东方财富新股申购接口（`RPTA_APP_IPOAPPLY`）与新浪日 K。截止日期写在 Excel 标题行。
+
+## 部署到公网（Vercel，推荐）
+
+本项目是 Next.js，可一键部署到 [Vercel](https://vercel.com)。
+
+1. 打开导入页：  
+   [https://vercel.com/new/import?s=https://github.com/NBmao/a-share-ipo-2026](https://vercel.com/new/import?s=https://github.com/NBmao/a-share-ipo-2026)
+2. 用 GitHub 登录 Vercel，选择仓库 `NBmao/a-share-ipo-2026`，Framework 选 Next.js，直接 Deploy。
+3. 为了让「交易记账」在线上也能保存，到 Vercel 项目 → Settings → Environment Variables 添加：
+
+| Name | Value |
+| --- | --- |
+| `TRADES_GITHUB_TOKEN` | 有 `repo` 权限的 GitHub PAT |
+| `TRADES_GITHUB_REPO` | `NBmao/a-share-ipo-2026` |
+| `TRADES_GITHUB_BRANCH` | `main` |
+
+4. 重新 Deploy 一次。之后页面记账会写回仓库里的 `data/trades.json`。
+
+本地开发不设这些变量时，仍直接读写本地 `data/trades.json`。
+
