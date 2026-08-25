@@ -251,36 +251,36 @@ export function PnlSummary({ items, trades }: Props) {
           <div>
             <h2 className="text-base font-semibold">理论收益区间 vs 实际收益率</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              虚线柱是理论区间：下沿 = 首日最高买、次日最低卖；上沿 = 首日最低买、次日最高卖。
-              实心柱是你的实际收益率。左右滑动可查看全部。
+              虚线柱是理论区间：左沿 = 首日最高买、次日最低卖；右沿 = 首日最低买、次日最高卖。
+              实心柱是你的实际收益率。可上下滚动查看。
             </p>
           </div>
-          <div className="-mx-1 w-[calc(100%+0.5rem)] overflow-x-auto px-1 sm:mx-0 sm:w-full sm:px-0">
+          <div className="w-full overflow-x-auto">
             <div
-              className="h-[320px] sm:h-[400px]"
-              style={{ width: Math.max(560, chartData.length * 42) }}
+              className="w-full min-w-[300px]"
+              style={{ height: Math.max(360, chartData.length * 36 + 72) }}
             >
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
+                  layout="vertical"
                   data={chartData}
-                  margin={{ top: 8, right: 8, left: 8, bottom: 64 }}
-                  barCategoryGap="22%"
+                  margin={{ top: 8, right: 16, left: 4, bottom: 8 }}
+                  barCategoryGap="28%"
                 >
-                  <CartesianGrid vertical={false} stroke="#e2e8f0" />
+                  <CartesianGrid horizontal={false} stroke="#e2e8f0" />
                   <XAxis
-                    dataKey="label"
-                    interval={0}
-                    angle={-55}
-                    textAnchor="end"
-                    tick={{ fontSize: 11, fill: "#475569" }}
-                    height={72}
-                  />
-                  <YAxis
+                    type="number"
                     tickFormatter={(value: number) => `${value}%`}
                     tick={{ fontSize: 11, fill: "#475569" }}
-                    width={52}
                   />
-                  <ReferenceLine y={0} stroke="#94a3b8" />
+                  <YAxis
+                    type="category"
+                    dataKey="label"
+                    width={72}
+                    tick={{ fontSize: 11, fill: "#475569" }}
+                    interval={0}
+                  />
+                  <ReferenceLine x={0} stroke="#94a3b8" />
                   <Tooltip
                     content={({ active, payload, label }) => {
                       if (!active || !payload?.length) return null;
@@ -309,7 +309,7 @@ export function PnlSummary({ items, trades }: Props) {
                     stackId="theory"
                     fill="transparent"
                     legendType="none"
-                    maxBarSize={18}
+                    maxBarSize={14}
                     isAnimationActive={false}
                   />
                   <Bar
@@ -320,7 +320,7 @@ export function PnlSummary({ items, trades }: Props) {
                     stroke="#64748b"
                     strokeWidth={1.5}
                     strokeDasharray="4 3"
-                    maxBarSize={18}
+                    maxBarSize={14}
                     isAnimationActive={false}
                     legendType="rect"
                   />
@@ -328,8 +328,8 @@ export function PnlSummary({ items, trades }: Props) {
                     dataKey="actual"
                     name="实际收益率"
                     fill="#0f2744"
-                    maxBarSize={18}
-                    radius={[2, 2, 0, 0]}
+                    maxBarSize={14}
+                    radius={[0, 2, 2, 0]}
                   >
                     {chartData.map((entry) => (
                       <Cell

@@ -1,7 +1,15 @@
 "use client";
 
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
+import { Check, ChevronsUpDown, Pencil, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -80,7 +88,15 @@ export function TradeJournal({
   );
   const selectedCode = prefillCode ?? form.code;
   const selected = selectedCode ? byCode.get(selectedCode) : undefined;
-  const listed = items.filter((item) => item.上市状态 === "已上市" || item.上市日期);
+  const listed = useMemo(
+    () => items.filter((item) => item.上市状态 === "已上市" || item.上市日期),
+    [items],
+  );
+
+  useEffect(() => {
+    if (!prefillCode) return;
+    setForm((current) => ({ ...current, code: prefillCode }));
+  }, [prefillCode]);
 
   const autoPnl = (() => {
     const buy = Number(form.buyPrice);
@@ -165,23 +181,15 @@ export function TradeJournal({
           </div>
           <form className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" onSubmit={submit}>
             <Field label="股票">
-              <select
+              <StockCombobox
+                items={listed}
                 value={selectedCode}
-                onChange={(event) => {
+                onChange={(code) => {
                   onPrefillConsumed();
-                  setForm((current) => ({ ...current, code: event.target.value }));
+                  setForm((current) => ({ ...current, code }));
                   setError(null);
                 }}
-                className="h-11 w-full rounded-lg border border-input bg-transparent px-2.5 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:h-8 sm:text-sm"
-                aria-label="选择股票"
-              >
-                <option value="">选择已上市新股</option>
-                {listed.map((item) => (
-                  <option key={item.股票代码} value={item.股票代码}>
-                    {item.股票代码} {item.股票简称}（{formatDate(item.上市日期)}）
-                  </option>
-                ))}
-              </select>
+              />
             </Field>
             <Field label="首日买入价（元）">
               <Input
@@ -385,6 +393,146 @@ export function TradeJournal({
   );
 }
 
+function StockCombobox({
+  items,
+  value,
+  onChange,
+}: {
+  items: IpoItem[];
+  value: string;
+  onChange: (code: string) => void;
+}) {
+  const listId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selected = items.find((item) => item.股票代码 === value);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    if (selected) {
+      setQuery(`${selected.股票代码} ${selected.股票简称}`);
+    } else if (!value) {
+      setQuery("");
+    }
+  }, [selected, value]);
+
+  useEffect(() => {
+    function onPointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+        if (selected) {
+          setQuery(`${selected.股票代码} ${selected.股票简称}`);
+        }
+      }
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [selected]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q || (selected && query === `${selected.股票代码} ${selected.股票简称}`)) {
+      return items.slice(0, 80);
+    }
+    return items
+      .filter((item) => {
+        return (
+          item.股票代码.includes(q) ||
+          item.股票简称.toLowerCase().includes(q) ||
+          (item.公司全称 ?? "").toLowerCase().includes(q)
+        );
+      })
+      .slice(0, 80);
+  }, [items, query, selected]);
+
+  return (
+    <div ref={rootRef} className="relative">
+      <div className="relative">
+        <Input
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-label="输入代码或简称筛选新股"
+          value={query}
+          placeholder="输入代码 / 简称筛选"
+          autoComplete="off"
+          className="h-11 pr-9 text-base sm:h-8 sm:text-sm"
+          onFocus={() => setOpen(true)}
+          onChange={(event) => {
+            const next = event.target.value;
+            setQuery(next);
+            setOpen(true);
+            if (value) onChange("");
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              setOpen(false);
+              if (selected) {
+                setQuery(`${selected.股票代码} ${selected.股票简称}`);
+              }
+            }
+            if (event.key === "Enter" && filtered.length === 1) {
+              event.preventDefault();
+              const item = filtered[0]!;
+              onChange(item.股票代码);
+              setQuery(`${item.股票代码} ${item.股票简称}`);
+              setOpen(false);
+            }
+          }}
+        />
+        <ChevronsUpDown className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+      </div>
+      {open ? (
+        <ul
+          id={listId}
+          role="listbox"
+          className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-lg border bg-white py-1 shadow-lg ring-1 ring-foreground/10"
+        >
+          {filtered.length === 0 ? (
+            <li className="px-3 py-2 text-sm text-muted-foreground">没有匹配的新股</li>
+          ) : (
+            filtered.map((item) => {
+              const active = item.股票代码 === value;
+              return (
+                <li key={item.股票代码} role="option" aria-selected={active}>
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-muted",
+                      active && "bg-muted",
+                    )}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      onChange(item.股票代码);
+                      setQuery(`${item.股票代码} ${item.股票简称}`);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "size-3.5 shrink-0",
+                        active ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {item.股票代码}
+                    </span>
+                    <span className="font-medium">{item.股票简称}</span>
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {formatDate(item.上市日期)}
+                    </span>
+                  </button>
+                </li>
+              );
+            })
+          )}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 function Field({
   label,
   children,
@@ -427,7 +575,9 @@ function TradeCard({
       <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
         <div>
           <p className="text-xs text-muted-foreground">买入</p>
-          <p>{formatNumber(trade.buyPrice)} 元 × {formatNumber(trade.shares, 0)} 股</p>
+          <p>
+            {formatNumber(trade.buyPrice)} 元 × {formatNumber(trade.shares, 0)} 股
+          </p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground">次日收益</p>
