@@ -1,6 +1,8 @@
 import { promises as fs } from "fs";
 import path from "path";
+import type { Board } from "@/lib/ipo";
 import type { Trade } from "@/lib/trades";
+import { ensureSchema, hasDatabase, sql } from "@/lib/db";
 
 export type TradesFile = {
   updatedAt: string | null;
@@ -8,21 +10,6 @@ export type TradesFile = {
 };
 
 const TRADES_PATH = path.join(process.cwd(), "data", "trades.json");
-const GITHUB_PATH = "data/trades.json";
-
-function githubConfig() {
-  const token =
-    process.env.TRADES_GITHUB_TOKEN ||
-    process.env.GITHUB_TOKEN ||
-    process.env.GH_TOKEN ||
-    "";
-  const repo =
-    process.env.TRADES_GITHUB_REPO ||
-    process.env.GITHUB_REPOSITORY ||
-    "NBmao/a-share-ipo-2026";
-  const branch = process.env.TRADES_GITHUB_BRANCH || "main";
-  return { token, repo, branch, enabled: Boolean(token) };
-}
 
 function emptyFile(): TradesFile {
   return { updatedAt: null, trades: [] };
@@ -56,84 +43,109 @@ async function writeLocal(trades: Trade[]): Promise<TradesFile> {
   return payload;
 }
 
-async function readGitHub(): Promise<TradesFile> {
-  const { token, repo, branch } = githubConfig();
-  const url = `https://api.github.com/repos/${repo}/contents/${GITHUB_PATH}?ref=${encodeURIComponent(branch)}`;
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-      "User-Agent": "a-share-ipo-2026",
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-    cache: "no-store",
-  });
-  if (response.status === 404) return emptyFile();
-  if (!response.ok) {
-    throw new Error(`读取 GitHub 交易记录失败: ${response.status}`);
-  }
-  const data = (await response.json()) as { content?: string; encoding?: string };
-  if (!data.content) return emptyFile();
-  const raw = Buffer.from(data.content, "base64").toString("utf8");
-  return parseTrades(raw);
+function rowToTrade(row: Record<string, unknown>): Trade {
+  return {
+    id: String(row.id),
+    code: String(row.code),
+    name: String(row.name),
+    board: row.board as Board,
+    listingDate: (row.listing_date as string | null) ?? null,
+    buyPrice: Number(row.buy_price),
+    shares: Number(row.shares),
+    sellPrice:
+      row.sell_price === null || row.sell_price === undefined
+        ? null
+        : Number(row.sell_price),
+    pnl: Number(row.pnl),
+    note: String(row.note ?? ""),
+    createdAt:
+      row.created_at instanceof Date
+        ? row.created_at.toISOString()
+        : String(row.created_at),
+  };
 }
 
-async function writeGitHub(trades: Trade[]): Promise<TradesFile> {
-  const { token, repo, branch } = githubConfig();
-  const payload: TradesFile = {
-    updatedAt: new Date().toISOString(),
-    trades,
+async function readDb(): Promise<TradesFile> {
+  await ensureSchema();
+  const db = sql();
+  const meta = await db`SELECT updated_at FROM trades_meta WHERE id = 1`;
+  const rows = await db`
+    SELECT
+      id, code, name, board, listing_date, buy_price, shares,
+      sell_price, pnl, note, created_at
+    FROM trades
+    ORDER BY created_at DESC
+  `;
+  return {
+    updatedAt: meta.length
+      ? new Date(
+          (meta[0] as { updated_at: string | Date }).updated_at,
+        ).toISOString()
+      : null,
+    trades: rows.map((row) => rowToTrade(row as Record<string, unknown>)),
   };
-  const metaUrl = `https://api.github.com/repos/${repo}/contents/${GITHUB_PATH}?ref=${encodeURIComponent(branch)}`;
-  const metaResponse = await fetch(metaUrl, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-      "User-Agent": "a-share-ipo-2026",
-      "X-GitHub-Api-Version": "2022-11-28",
-    },
-    cache: "no-store",
-  });
-  let sha: string | undefined;
-  if (metaResponse.ok) {
-    const meta = (await metaResponse.json()) as { sha?: string };
-    sha = meta.sha;
-  } else if (metaResponse.status !== 404) {
-    throw new Error(`读取 GitHub 文件信息失败: ${metaResponse.status}`);
-  }
+}
 
-  const putResponse = await fetch(
-    `https://api.github.com/repos/${repo}/contents/${GITHUB_PATH}`,
-    {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/vnd.github+json",
-        "User-Agent": "a-share-ipo-2026",
-        "Content-Type": "application/json",
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
-      body: JSON.stringify({
-        message: `chore: update trades.json (${trades.length} trades)`,
-        content: Buffer.from(JSON.stringify(payload, null, 2), "utf8").toString(
-          "base64",
-        ),
-        branch,
-        ...(sha ? { sha } : {}),
-      }),
-    },
-  );
-  if (!putResponse.ok) {
-    const text = await putResponse.text();
-    throw new Error(`写入 GitHub 交易记录失败: ${putResponse.status} ${text}`);
+async function writeDb(trades: Trade[]): Promise<TradesFile> {
+  await ensureSchema();
+  const db = sql();
+  await db`DELETE FROM trades`;
+  for (const trade of trades) {
+    await db`
+      INSERT INTO trades (
+        id, code, name, board, listing_date, buy_price, shares,
+        sell_price, pnl, note, created_at
+      ) VALUES (
+        ${trade.id},
+        ${trade.code},
+        ${trade.name},
+        ${trade.board},
+        ${trade.listingDate},
+        ${trade.buyPrice},
+        ${trade.shares},
+        ${trade.sellPrice},
+        ${trade.pnl},
+        ${trade.note},
+        ${trade.createdAt}
+      )
+    `;
   }
-  return payload;
+  const updatedAt = new Date().toISOString();
+  await db`
+    INSERT INTO trades_meta (id, updated_at)
+    VALUES (1, ${updatedAt})
+    ON CONFLICT (id) DO UPDATE SET updated_at = EXCLUDED.updated_at
+  `;
+  return { updatedAt, trades };
+}
+
+export async function seedTradesFromLocalIfEmpty(): Promise<boolean> {
+  if (!hasDatabase()) return false;
+  await ensureSchema();
+  const db = sql();
+  const rows = await db`SELECT count(*)::int AS n FROM trades`;
+  const n = Number((rows[0] as { n: number }).n);
+  if (n > 0) return false;
+  const local = await readLocal();
+  if (!local.trades.length) {
+    await db`
+      INSERT INTO trades_meta (id, updated_at)
+      VALUES (1, ${local.updatedAt})
+      ON CONFLICT (id) DO NOTHING
+    `;
+    return false;
+  }
+  await writeDb(local.trades);
+  return true;
 }
 
 export async function readTradesFile(): Promise<TradesFile> {
-  return githubConfig().enabled ? readGitHub() : readLocal();
+  if (!hasDatabase()) return readLocal();
+  await seedTradesFromLocalIfEmpty();
+  return readDb();
 }
 
 export async function writeTradesFile(trades: Trade[]): Promise<TradesFile> {
-  return githubConfig().enabled ? writeGitHub(trades) : writeLocal(trades);
+  if (!hasDatabase()) return writeLocal(trades);
+  return writeDb(trades);
 }

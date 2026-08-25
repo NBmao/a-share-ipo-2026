@@ -1,7 +1,9 @@
 import { IpoDashboard } from "@/components/ipo-dashboard";
-import type { IpoPayload } from "@/lib/ipo";
-import payload from "../../data/ipo_2026.json";
+import { readIpoPayload } from "@/lib/ipo-store";
 
-export default function Home() {
-  return <IpoDashboard data={payload as IpoPayload} />;
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const data = await readIpoPayload();
+  return <IpoDashboard data={data} />;
 }
