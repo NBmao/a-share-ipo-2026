@@ -147,7 +147,7 @@ export function IpoDashboard({ data }: Props) {
         <div
           role="tablist"
           aria-label="功能页签"
-          className="flex w-full flex-wrap gap-1 rounded-lg bg-white p-1 shadow-sm ring-1 ring-foreground/10"
+          className="relative z-10 flex w-full gap-1 rounded-lg bg-white p-1 shadow-sm ring-1 ring-foreground/10"
         >
           {(
             [
@@ -169,13 +169,13 @@ export function IpoDashboard({ data }: Props) {
                   setTab(item.id);
                 }}
                 className={cn(
-                  "inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors",
+                  "relative z-10 inline-flex h-9 min-h-9 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors [&_svg]:pointer-events-none",
                   active
                     ? "bg-[#0f2744] text-white shadow-sm"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
               >
-                <Icon className="size-3.5" />
+                <Icon className="size-3.5" aria-hidden />
                 {item.label}
               </button>
             );
@@ -346,14 +346,14 @@ export function IpoDashboard({ data }: Props) {
         </p>
       </main>
 
-      <Sheet
-        open={selected !== null}
-        onOpenChange={(open) => {
-          if (!open) setSelected(null);
-        }}
-      >
-        <SheetContent side="right" className="w-full sm:max-w-md">
-          {selected ? (
+      {selected ? (
+        <Sheet
+          open
+          onOpenChange={(open) => {
+            if (!open) setSelected(null);
+          }}
+        >
+          <SheetContent side="right" className="w-full sm:max-w-md">
             <IpoDetail
               item={selected}
               onRecord={() => {
@@ -362,9 +362,9 @@ export function IpoDashboard({ data }: Props) {
                 setTab("journal");
               }}
             />
-          ) : null}
-        </SheetContent>
-      </Sheet>
+          </SheetContent>
+        </Sheet>
+      ) : null}
     </div>
   );
 }
