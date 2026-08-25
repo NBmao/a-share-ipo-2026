@@ -101,29 +101,6 @@ def fetch_ipo_pages(filter_expr: str) -> list[dict]:
     return items
 
 
-def fetch_quotes(codes: list[str]) -> dict[str, dict]:
-    quotes: dict[str, dict] = {}
-    fields = "f12,f14,f2,f3,f20,f21"
-    for i in range(0, len(codes), 30):
-        chunk = codes[i : i + 30]
-        secids = ",".join(f"{market_id(c)}.{c}" for c in chunk)
-        params = {
-            "fltt": "2",
-            "invt": "2",
-            "fields": fields,
-            "secids": secids,
-        }
-        url = "https://push2delay.eastmoney.com/api/qt/ulist.np/get?" + urllib.parse.urlencode(params)
-        payload = get_json(url)
-        diff = ((payload.get("data") or {}).get("diff")) or []
-        for row in diff:
-            code = str(row.get("f12") or "")
-            if code:
-                quotes[code] = row
-        time.sleep(0.25)
-    return quotes
-
-
 def sina_symbol(code: str) -> str:
     return f"{'sh' if code.startswith('6') else 'sz'}{code}"
 
@@ -204,7 +181,6 @@ def main() -> None:
                 by_code[code] = row
 
     stocks = [row for code, row in by_code.items() if board_of(code)]
-    quotes = fetch_quotes([row["SECURITY_CODE"] for row in stocks])
 
     day_bars: dict[str, list[dict]] = {}
     for row in stocks:
@@ -218,7 +194,6 @@ def main() -> None:
     records: list[dict] = []
     for row in stocks:
         code = row["SECURITY_CODE"]
-        quote = quotes.get(code) or {}
         board = board_of(code)
         listing_date = parse_date(row.get("LISTING_DATE"))
         apply_date = parse_date(row.get("APPLY_DATE"))
@@ -270,20 +245,8 @@ def main() -> None:
         second_low = day2.get("low") if day2 else None
         second_date = day2.get("day") if day2 else None
 
-        last_price = num(quote.get("f2"))
-        total_cap = num(quote.get("f20"))
-        float_cap = num(quote.get("f21"))
-        total_cap_yi = total_cap / 1e8 if total_cap else None
-        float_cap_yi = float_cap / 1e8 if float_cap else None
-        float_shares_wan = None
-        if last_price and float_cap:
-            float_shares_wan = float_cap / last_price / 10000.0
-        elif online_wan:
-            float_shares_wan = online_wan
-
         status = listing_status(listing_date, issue_price, apply_date)
         name = row.get("SECURITY_NAME_ABBR") or row.get("SECURITY_NAME")
-        # 去掉行情里的 C 前缀展示差异，保留官方简称
         records.append(
             {
                 "股票代码": code,
@@ -302,11 +265,6 @@ def main() -> None:
                 "募集资金_亿元": round_or_none(raise_yi, 4),
                 "发行后总市值_亿元": round_or_none(issue_market_yi, 4),
                 "发行流通值_亿元": round_or_none(issue_float_yi, 4),
-                "当前流通股本_万股": round_or_none(float_shares_wan, 2),
-                "当前流通市值_亿元": round_or_none(float_cap_yi, 4),
-                "当前总市值_亿元": round_or_none(total_cap_yi, 4),
-                "最新价": round_or_none(last_price, 2),
-                "涨跌幅_pct": round_or_none(num(quote.get("f3")), 2),
                 "首日开盘价": round_or_none(first_open, 2),
                 "首日收盘价": round_or_none(first_close, 2),
                 "首日最高价": round_or_none(first_high, 2),
@@ -331,8 +289,8 @@ def main() -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         "asOf": AS_OF.strftime("%Y-%m-%d"),
-        "source": "东方财富新股申购接口 RPTA_APP_IPOAPPLY + 行情流通市值",
-        "note": "发行流通值 = 网上发行股数 × 发行价（亿元）。无网上发行数据时回退为发行总量 × 发行价。北交所已排除。",
+        "source": "东方财富新股申购接口 RPTA_APP_IPOAPPLY + 新浪日K（首日/次日高低价）",
+        "note": "发行流通值 = 网上发行股数 × 发行价（亿元）。无网上发行数据时回退为发行总量 × 发行价。北交所已排除。不含实时行情字段。",
         "count": len(records),
         "boards": {
             "沪市主板": sum(1 for r in records if r["板块"] == "沪市主板"),
@@ -367,11 +325,6 @@ def main() -> None:
         "募集资金(亿元)",
         "发行后总市值(亿元)",
         "发行流通值(亿元)",
-        "当前流通股本(万股)",
-        "当前流通市值(亿元)",
-        "当前总市值(亿元)",
-        "最新价(元)",
-        "涨跌幅(%)",
         "首日开盘价(元)",
         "首日收盘价(元)",
         "首日最高价(元)",
@@ -393,11 +346,6 @@ def main() -> None:
         "募集资金(亿元)": "募集资金_亿元",
         "发行后总市值(亿元)": "发行后总市值_亿元",
         "发行流通值(亿元)": "发行流通值_亿元",
-        "当前流通股本(万股)": "当前流通股本_万股",
-        "当前流通市值(亿元)": "当前流通市值_亿元",
-        "当前总市值(亿元)": "当前总市值_亿元",
-        "最新价(元)": "最新价",
-        "涨跌幅(%)": "涨跌幅_pct",
         "首日开盘价(元)": "首日开盘价",
         "首日收盘价(元)": "首日收盘价",
         "首日最高价(元)": "首日最高价",
@@ -534,10 +482,8 @@ def main() -> None:
         ["募集资金", "实际募集资金总额（亿元），含超额配售（如有）"],
         ["发行后总市值", "发行价 × 发行后总股本"],
         ["发行流通值", "网上发行股数 × 发行价（亿元）。衡量发行口径下的可流通市值"],
-        ["当前流通市值", "最新行情流通市值（亿元）；未上市个股可能仅为预估或空值"],
-        ["当前总市值", "最新行情总市值（亿元）；未上市按发行价估算"],
         ["范围", "仅含2026年主板、创业板、科创板，已排除北交所"],
-        ["数据来源", "东方财富 datacenter-web RPTA_APP_IPOAPPLY、push2delay 行情"],
+        ["数据来源", "东方财富 datacenter-web RPTA_APP_IPOAPPLY、新浪日K"],
         ["截止日期", AS_OF.strftime("%Y-%m-%d")],
     ]
     note["A1"].font = Font(name="微软雅黑", size=12, bold=True)

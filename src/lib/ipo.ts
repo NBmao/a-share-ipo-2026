@@ -22,11 +22,6 @@ export type IpoItem = {
   募集资金_亿元: number | null;
   发行后总市值_亿元: number | null;
   发行流通值_亿元: number | null;
-  当前流通股本_万股: number | null;
-  当前流通市值_亿元: number | null;
-  当前总市值_亿元: number | null;
-  最新价: number | null;
-  涨跌幅_pct: number | null;
   首日开盘价: number | null;
   首日收盘价: number | null;
   首日最高价: number | null;
@@ -82,10 +77,7 @@ export function formatDate(value: string | null | undefined): string {
 
 export function sum(
   items: IpoItem[],
-  key: keyof Pick<
-    IpoItem,
-    "募集资金_亿元" | "发行流通值_亿元" | "当前流通市值_亿元"
-  >,
+  key: keyof Pick<IpoItem, "募集资金_亿元" | "发行流通值_亿元">,
 ): number {
   return items.reduce((acc, item) => acc + (item[key] ?? 0), 0);
 }

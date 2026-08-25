@@ -37,7 +37,6 @@ import {
   BOARDS,
   STATUS_OPTIONS,
   STATUS_STYLES,
-  changeClass,
   formatDate,
   formatNumber,
   formatYi,
@@ -60,7 +59,7 @@ export function IpoDashboard({ data }: Props) {
   const [status, setStatus] = useState<(typeof STATUS_OPTIONS)[number]>("全部");
   const [selected, setSelected] = useState<IpoItem | null>(null);
   const [prefillCode, setPrefillCode] = useState<string | null>(null);
-  const { trades, upsert, remove } = useTrades();
+  const { trades, upsert, remove, error: tradesError } = useTrades();
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -270,8 +269,6 @@ export function IpoDashboard({ data }: Props) {
                     <TableHead className="text-right">发行量</TableHead>
                     <TableHead className="text-right">发行流通值</TableHead>
                     <TableHead className="text-right">募集资金</TableHead>
-                    <TableHead className="text-right">流通市值</TableHead>
-                    <TableHead className="text-right">最新价</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -312,24 +309,6 @@ export function IpoDashboard({ data }: Props) {
                       <TableCell className="text-right font-mono tabular-nums">
                         {formatYi(item.募集资金_亿元)}
                       </TableCell>
-                      <TableCell className="text-right font-mono tabular-nums">
-                        {formatYi(item.当前流通市值_亿元)}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex flex-col items-end">
-                          <span className="font-mono tabular-nums">
-                            {item.最新价 ? formatNumber(item.最新价) : "—"}
-                          </span>
-                          <span
-                            className={cn(
-                              "font-mono text-xs tabular-nums",
-                              changeClass(item.涨跌幅_pct),
-                            )}
-                          >
-                            {item.涨跌幅_pct === null ? "" : signedPct(item.涨跌幅_pct)}
-                          </span>
-                        </div>
-                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -341,6 +320,12 @@ export function IpoDashboard({ data }: Props) {
         ) : null}
 
         {tab === "journal" ? (
+          <div className="flex flex-col gap-3">
+            {tradesError ? (
+              <p className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {tradesError}
+              </p>
+            ) : null}
             <TradeJournal
               items={data.items}
               trades={trades}
@@ -349,6 +334,7 @@ export function IpoDashboard({ data }: Props) {
               onSave={upsert}
               onDelete={remove}
             />
+          </div>
         ) : null}
 
         {tab === "summary" ? (
@@ -356,7 +342,7 @@ export function IpoDashboard({ data }: Props) {
         ) : null}
 
         <p className="pb-6 text-xs leading-5 text-muted-foreground">
-          {data.note} 交易记录只存在你的浏览器本地。理论最高 =（次日最高 − 首日最低）/ 首日最低；理论最低 =（次日最低 − 首日最高）/ 首日最高；实际收益率 = 次日收益 /（买入价 × 股数）。
+          {data.note} 交易记录保存在仓库文件 data/trades.json。理论最高 =（次日最高 − 首日最低）/ 首日最低；理论最低 =（次日最低 − 首日最高）/ 首日最高；实际收益率 = 次日收益 /（买入价 × 股数）。
         </p>
       </main>
 
@@ -509,11 +495,6 @@ function IpoDetail({
     ["募集资金", formatYi(item.募集资金_亿元)],
     ["发行后总市值", formatYi(item.发行后总市值_亿元)],
     ["发行流通值", formatYi(item.发行流通值_亿元)],
-    ["当前流通股本", item.当前流通股本_万股 ? `${formatNumber(item.当前流通股本_万股)} 万股` : "—"],
-    ["当前流通市值", formatYi(item.当前流通市值_亿元)],
-    ["当前总市值", formatYi(item.当前总市值_亿元)],
-    ["最新价", item.最新价 ? `${formatNumber(item.最新价)} 元` : "—"],
-    ["涨跌幅", signedPct(item.涨跌幅_pct)],
     ["首日开盘价", item.首日开盘价 ? `${formatNumber(item.首日开盘价)} 元` : "—"],
     ["首日收盘价", item.首日收盘价 ? `${formatNumber(item.首日收盘价)} 元` : "—"],
     ["首日最高价", item.首日最高价 ? `${formatNumber(item.首日最高价)} 元` : "—"],

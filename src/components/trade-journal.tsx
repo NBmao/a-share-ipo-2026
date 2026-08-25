@@ -159,7 +159,7 @@ export function TradeJournal({
             <h2 className="text-base font-semibold">录入首日买入 / 次日卖出</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               记下上市首日买了哪只、什么价、多少股，以及次日抛出一共赚了多少。
-              记账保存在本机浏览器，不会上传。
+              记账写入仓库 <code className="rounded bg-muted px-1">data/trades.json</code>。
             </p>
           </div>
           <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" onSubmit={submit}>

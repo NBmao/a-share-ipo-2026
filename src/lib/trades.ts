@@ -6,7 +6,7 @@ import {
   type IpoItem,
 } from "@/lib/ipo";
 
-export const TRADES_STORAGE_KEY = "a-share-ipo-2026-trades-v1";
+export const TRADES_FILE = "data/trades.json";
 
 export type Trade = {
   id: string;

@@ -1,55 +1,80 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
-import { TRADES_STORAGE_KEY, type Trade } from "@/lib/trades";
+import { useCallback, useEffect, useState } from "react";
+import type { Trade } from "@/lib/trades";
 
-let memory: Trade[] | null = null;
-const listeners = new Set<() => void>();
-
-function emit() {
-  for (const listener of listeners) listener();
+async function fetchTrades(): Promise<Trade[]> {
+  const response = await fetch("/api/trades", { cache: "no-store" });
+  if (!response.ok) throw new Error("读取交易记录失败");
+  const data = (await response.json()) as { trades?: Trade[] };
+  return Array.isArray(data.trades) ? data.trades : [];
 }
 
-function readTrades(): Trade[] {
-  if (memory) return memory;
-  try {
-    const raw = window.localStorage.getItem(TRADES_STORAGE_KEY);
-    const parsed = raw ? (JSON.parse(raw) as Trade[]) : [];
-    memory = Array.isArray(parsed) ? parsed : [];
-  } catch {
-    memory = [];
-  }
-  return memory;
-}
-
-function writeTrades(next: Trade[]) {
-  memory = next;
-  window.localStorage.setItem(TRADES_STORAGE_KEY, JSON.stringify(next));
-  emit();
-}
-
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => listeners.delete(listener);
+async function saveTrades(trades: Trade[]): Promise<Trade[]> {
+  const response = await fetch("/api/trades", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ trades }),
+  });
+  if (!response.ok) throw new Error("保存交易记录失败");
+  const data = (await response.json()) as { trades?: Trade[] };
+  return Array.isArray(data.trades) ? data.trades : trades;
 }
 
 export function useTrades() {
-  const trades = useSyncExternalStore(subscribe, readTrades, () => []);
+  const [trades, setTrades] = useState<Trade[]>([]);
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const upsert = useCallback((trade: Trade) => {
-    const current = readTrades();
-    const index = current.findIndex((item) => item.id === trade.id);
-    if (index === -1) writeTrades([trade, ...current]);
-    else {
-      const next = [...current];
-      next[index] = trade;
-      writeTrades(next);
-    }
+  useEffect(() => {
+    let cancelled = false;
+    fetchTrades()
+      .then((items) => {
+        if (!cancelled) {
+          setTrades(items);
+          setError(null);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "读取失败");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const remove = useCallback((id: string) => {
-    writeTrades(readTrades().filter((item) => item.id !== id));
+  const upsert = useCallback(async (trade: Trade) => {
+    setError(null);
+    setTrades((current) => {
+      const index = current.findIndex((item) => item.id === trade.id);
+      const next =
+        index === -1
+          ? [trade, ...current]
+          : current.map((item, i) => (i === index ? trade : item));
+      void saveTrades(next).catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : "保存失败");
+        void fetchTrades().then(setTrades);
+      });
+      return next;
+    });
   }, []);
 
-  return { trades, upsert, remove };
+  const remove = useCallback(async (id: string) => {
+    setError(null);
+    setTrades((current) => {
+      const next = current.filter((item) => item.id !== id);
+      void saveTrades(next).catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : "保存失败");
+        void fetchTrades().then(setTrades);
+      });
+      return next;
+    });
+  }, []);
+
+  return { trades, ready, error, upsert, remove };
 }
