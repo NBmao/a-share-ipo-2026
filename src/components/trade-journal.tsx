@@ -159,10 +159,11 @@ export function TradeJournal({
             <h2 className="text-base font-semibold">录入首日买入 / 次日卖出</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               记下上市首日买了哪只、什么价、多少股，以及次日抛出一共赚了多少。
-              记账写入仓库 <code className="rounded bg-muted px-1">data/trades.json</code>。
+              线上写入 Postgres，本地无库时回退到{" "}
+              <code className="rounded bg-muted px-1">data/trades.json</code>。
             </p>
           </div>
-          <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" onSubmit={submit}>
+          <form className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" onSubmit={submit}>
             <Field label="股票">
               <select
                 value={selectedCode}
@@ -171,7 +172,7 @@ export function TradeJournal({
                   setForm((current) => ({ ...current, code: event.target.value }));
                   setError(null);
                 }}
-                className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                className="h-11 w-full rounded-lg border border-input bg-transparent px-2.5 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 sm:h-8 sm:text-sm"
                 aria-label="选择股票"
               >
                 <option value="">选择已上市新股</option>
@@ -190,6 +191,7 @@ export function TradeJournal({
                   setForm((current) => ({ ...current, buyPrice: event.target.value }))
                 }
                 placeholder={selected?.首日开盘价 ? `开盘 ${selected.首日开盘价}` : "例如 28.50"}
+                className="h-11 text-base sm:h-8 sm:text-sm"
               />
             </Field>
             <Field label="买入股数">
@@ -200,6 +202,7 @@ export function TradeJournal({
                   setForm((current) => ({ ...current, shares: event.target.value }))
                 }
                 placeholder="例如 500"
+                className="h-11 text-base sm:h-8 sm:text-sm"
               />
             </Field>
             <Field label="次日卖出价（元，选填）">
@@ -211,6 +214,7 @@ export function TradeJournal({
                   setForm((current) => ({ ...current, sellPrice: event.target.value }));
                 }}
                 placeholder="填了会自动算收益"
+                className="h-11 text-base sm:h-8 sm:text-sm"
               />
             </Field>
             <Field label="次日抛出收益（元）">
@@ -222,6 +226,7 @@ export function TradeJournal({
                   setForm((current) => ({ ...current, pnl: event.target.value }));
                 }}
                 placeholder="可亏可为负"
+                className="h-11 text-base sm:h-8 sm:text-sm"
               />
             </Field>
             <Field label="备注">
@@ -231,9 +236,10 @@ export function TradeJournal({
                   setForm((current) => ({ ...current, note: event.target.value }))
                 }
                 placeholder="仓位、排队情况等"
+                className="h-11 text-base sm:h-8 sm:text-sm"
               />
             </Field>
-            <div className="flex flex-col justify-end gap-2 md:col-span-2 xl:col-span-3">
+            <div className="flex flex-col justify-end gap-2 sm:col-span-2 xl:col-span-3">
               {selected ? (
                 <p className="text-xs text-muted-foreground">
                   {selected.股票简称} 发行价 {formatYuan(selected.发行价)} · 理论区间{" "}

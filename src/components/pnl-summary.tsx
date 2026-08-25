@@ -123,7 +123,7 @@ export function PnlSummary({ items, trades }: Props) {
                 按上市月份或板块看总收益、本金和收益率。
               </p>
             </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex w-full gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:w-auto sm:flex-wrap sm:overflow-visible sm:pb-0">
               {DIMENSIONS.map((item) => (
                 <Button
                   key={item.key}
@@ -131,12 +131,51 @@ export function PnlSummary({ items, trades }: Props) {
                   size="sm"
                   variant={dimension === item.key ? "default" : "outline"}
                   onClick={() => setDimension(item.key)}
+                  className="h-9 shrink-0"
                 >
                   {item.label}
                 </Button>
               ))}
             </div>
           </div>
+          <div className="grid gap-2 sm:hidden">
+            {buckets.map((bucket) => (
+              <div
+                key={bucket.key}
+                className="rounded-lg bg-slate-50 px-3 py-3 ring-1 ring-foreground/5"
+              >
+                <p className="font-medium">{bucket.label}</p>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <p className="text-xs text-muted-foreground">笔数 / 胜率</p>
+                    <p>
+                      {bucket.trades} ·{" "}
+                      {bucket.trades
+                        ? `${formatNumber((bucket.wins / bucket.trades) * 100, 0)}%`
+                        : "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">本金</p>
+                    <p className="font-mono tabular-nums">{formatYuan(bucket.cost, 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">收益</p>
+                    <p className={cn("font-mono tabular-nums", changeClass(bucket.pnl))}>
+                      {formatYuan(bucket.pnl, 0)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">收益率</p>
+                    <p className={cn("font-mono tabular-nums", changeClass(bucket.returnPct))}>
+                      {signedPct(bucket.returnPct)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto sm:block">
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50 hover:bg-slate-50">
@@ -203,6 +242,7 @@ export function PnlSummary({ items, trades }: Props) {
               </TableRow>
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -212,11 +252,14 @@ export function PnlSummary({ items, trades }: Props) {
             <h2 className="text-base font-semibold">理论收益区间 vs 实际收益率</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               虚线柱是理论区间：下沿 = 首日最高买、次日最低卖；上沿 = 首日最低买、次日最高卖。
-              实心柱是你的实际收益率。
+              实心柱是你的实际收益率。左右滑动可查看全部。
             </p>
           </div>
-          <div className="w-full overflow-x-auto">
-            <div style={{ width: Math.max(720, chartData.length * 42), height: 400 }}>
+          <div className="-mx-1 w-[calc(100%+0.5rem)] overflow-x-auto px-1 sm:mx-0 sm:w-full sm:px-0">
+            <div
+              className="h-[320px] sm:h-[400px]"
+              style={{ width: Math.max(560, chartData.length * 42) }}
+            >
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={chartData}

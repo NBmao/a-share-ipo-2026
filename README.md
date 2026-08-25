@@ -30,13 +30,15 @@ npm run dev -- --port 43123 --hostname 127.0.0.1
 - 理论最低收益率 =（次日最低价 − 首日最高价）/ 首日最高价
 - 实际收益率 = 次日收益 /（买入价 × 股数）
 
-## 更新数据
+## 刷新新股数据
+
+首页「刷新数据」会调用 `/api/refresh`：从东方财富拉取最新申购/上市名单，并补齐新浪日 K 首日/次日高低价，写入 Neon（或本地 `data/ipo_2026.json`）。`asOf` 为当天日期。
+
+本地也可：
 
 ```bash
-python3 -m pip install -r requirements.txt
 python3 scripts/build_ipo_data.py
-cp data/2026新股_按上市日期.xlsx public/
-cp data/2026新股_按上市日期.xlsx public/ipo-2026.xlsx
+npm run db:seed   # 若已配置 DATABASE_URL
 ```
 
 产出：

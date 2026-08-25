@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import {
   Download,
   Search,
@@ -9,6 +10,7 @@ import {
   CalendarDays,
   NotebookPen,
   ChartColumn,
+  RefreshCw,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -53,13 +55,42 @@ type Props = { data: IpoPayload };
 type AppTab = "list" | "journal" | "summary";
 
 export function IpoDashboard({ data }: Props) {
+  const router = useRouter();
   const [tab, setTab] = useState<AppTab>("list");
   const [query, setQuery] = useState("");
   const [board, setBoard] = useState<"全部" | Board>("全部");
   const [status, setStatus] = useState<(typeof STATUS_OPTIONS)[number]>("全部");
   const [selected, setSelected] = useState<IpoItem | null>(null);
   const [prefillCode, setPrefillCode] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshMessage, setRefreshMessage] = useState<string | null>(null);
   const { trades, upsert, remove, error: tradesError } = useTrades();
+
+  async function refreshIpoData() {
+    if (refreshing) return;
+    setRefreshing(true);
+    setRefreshMessage(null);
+    try {
+      const response = await fetch("/api/refresh", { method: "POST" });
+      const body = (await response.json()) as {
+        ok?: boolean;
+        asOf?: string;
+        count?: number;
+        error?: string;
+      };
+      if (!response.ok || !body.ok) {
+        throw new Error(body.error || "刷新失败");
+      }
+      setRefreshMessage(`已更新至 ${body.asOf}，共 ${body.count} 只`);
+      router.refresh();
+    } catch (error) {
+      setRefreshMessage(
+        error instanceof Error ? error.message : "刷新失败，请稍后重试",
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -89,71 +120,88 @@ export function IpoDashboard({ data }: Props) {
   return (
     <div className="flex flex-1 flex-col">
       <header className="border-b border-white/10 bg-[#0f2744] text-white">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-4 pt-[max(1.25rem,env(safe-area-inset-top))] pb-5 sm:gap-6 sm:px-6 sm:py-8 lg:px-8">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="space-y-3">
-              <p className="text-xs font-medium tracking-[0.22em] text-sky-200/80 uppercase">
+            <div className="space-y-2 sm:space-y-3">
+              <p className="text-[11px] font-medium tracking-[0.18em] text-sky-200/80 uppercase sm:text-xs sm:tracking-[0.22em]">
                 2026 A-SHARE IPO
               </p>
-              <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+              <h1 className="text-xl font-semibold tracking-tight sm:text-3xl">
                 主板 / 创业板 / 科创板新股
               </h1>
               <p className="max-w-2xl text-sm leading-6 text-slate-300">
-                按上市日期排序的新股表，可记账首日买入、次日卖出，再按月或板块汇总收益。
-                数据截至 {data.asOf}，不含北交所。
+                按上市日期排序，可记账与汇总。数据截至{" "}
+                <span className="font-medium text-white">{data.asOf}</span>
+                ，不含北交所。
               </p>
+              {refreshMessage ? (
+                <p className="text-xs text-sky-100/90">{refreshMessage}</p>
+              ) : null}
             </div>
-            <a
-              href="/ipo-2026.xlsx"
-              download="2026新股_按上市日期.xlsx"
-              className={cn(
-                buttonVariants({ size: "lg" }),
-                "bg-white text-[#0f2744] hover:bg-sky-50",
-              )}
-            >
-              <Download />
-              下载 Excel
-            </a>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
+              <Button
+                type="button"
+                size="lg"
+                variant="outline"
+                disabled={refreshing}
+                onClick={() => void refreshIpoData()}
+                className="h-11 border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+              >
+                <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
+                {refreshing ? "刷新中…" : "刷新数据"}
+              </Button>
+              <a
+                href="/ipo-2026.xlsx"
+                download="2026新股_按上市日期.xlsx"
+                className={cn(
+                  buttonVariants({ size: "lg" }),
+                  "h-11 bg-white text-[#0f2744] hover:bg-sky-50",
+                )}
+              >
+                <Download />
+                下载 Excel
+              </a>
+            </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
             <Stat
               icon={<CalendarDays className="size-4" />}
               label="新股只数"
               value={`${data.count} 只`}
-              hint={`已上市 ${listed.length} · 待上市/待申购 ${data.count - listed.length}`}
+              hint={`已上市 ${listed.length} · 待定 ${data.count - listed.length}`}
             />
             <Stat
               icon={<Wallet className="size-4" />}
-              label="已定价募集资金"
+              label="已定价募集"
               value={`${formatNumber(raiseTotal, 1)} 亿`}
-              hint="有发行价的公司合计"
+              hint="有发行价公司合计"
             />
             <Stat
               icon={<TrendingUp className="size-4" />}
-              label="发行流通值合计"
+              label="发行流通值"
               value={`${formatNumber(floatTotal, 1)} 亿`}
               hint="网上发行 × 发行价"
             />
             <Stat
               label="分板块"
               value={`${data.boards["沪市主板"] + data.boards["深市主板"]} / ${data.boards["创业板"]} / ${data.boards["科创板"]}`}
-              hint="主板 / 创业板 / 科创板"
+              hint="主板 / 创业 / 科创"
             />
           </div>
         </div>
       </header>
 
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8">
+      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-3 px-3 py-4 sm:gap-4 sm:px-6 sm:py-6 lg:px-8">
         <div
           role="tablist"
           aria-label="功能页签"
-          className="relative z-10 flex w-full gap-1 rounded-lg bg-white p-1 shadow-sm ring-1 ring-foreground/10"
+          className="sticky top-0 z-20 -mx-3 flex w-[calc(100%+1.5rem)] gap-1 bg-[#f3f6fa]/95 px-3 py-2 backdrop-blur sm:relative sm:mx-0 sm:w-full sm:rounded-lg sm:bg-white sm:p-1 sm:shadow-sm sm:ring-1 sm:ring-foreground/10 sm:backdrop-blur-none"
         >
           {(
             [
-              { id: "list", label: "新股列表", icon: Search },
-              { id: "journal", label: "交易记账", icon: NotebookPen },
-              { id: "summary", label: "收益汇总", icon: ChartColumn },
+              { id: "list", label: "新股列表", short: "列表", icon: Search },
+              { id: "journal", label: "交易记账", short: "记账", icon: NotebookPen },
+              { id: "summary", label: "收益汇总", short: "汇总", icon: ChartColumn },
             ] as const
           ).map((item) => {
             const Icon = item.icon;
@@ -167,16 +215,18 @@ export function IpoDashboard({ data }: Props) {
                 onClick={() => {
                   setSelected(null);
                   setTab(item.id);
+                  setRefreshMessage(null);
                 }}
                 className={cn(
-                  "relative z-10 inline-flex h-9 min-h-9 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition-colors [&_svg]:pointer-events-none",
+                  "relative z-10 inline-flex h-11 min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md px-2 text-sm font-medium transition-colors sm:h-9 sm:min-h-9 sm:px-3 [&_svg]:pointer-events-none",
                   active
                     ? "bg-[#0f2744] text-white shadow-sm"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                    : "bg-white text-muted-foreground shadow-sm ring-1 ring-foreground/10 hover:bg-muted hover:text-foreground sm:bg-transparent sm:shadow-none sm:ring-0",
                 )}
               >
                 <Icon className="size-3.5" aria-hidden />
-                {item.label}
+                <span className="sm:hidden">{item.short}</span>
+                <span className="hidden sm:inline">{item.label}</span>
               </button>
             );
           })}
@@ -193,7 +243,7 @@ export function IpoDashboard({ data }: Props) {
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="搜索代码、简称、行业或公司全称"
-                  className="pl-8"
+                  className="h-11 pl-8 text-base sm:h-8 sm:text-sm"
                   aria-label="搜索新股"
                 />
               </div>
@@ -353,7 +403,10 @@ export function IpoDashboard({ data }: Props) {
             if (!open) setSelected(null);
           }}
         >
-          <SheetContent side="right" className="w-full sm:max-w-md">
+          <SheetContent
+            side="right"
+            className="w-full max-w-full gap-0 overflow-y-auto p-0 sm:max-w-md"
+          >
             <IpoDetail
               item={selected}
               onRecord={() => {
@@ -381,13 +434,15 @@ function Stat({
   icon?: ReactNode;
 }) {
   return (
-    <div className="rounded-xl bg-white/8 p-4 ring-1 ring-white/10">
-      <div className="flex items-center gap-2 text-xs text-sky-100/80">
+    <div className="rounded-xl bg-white/8 p-3 ring-1 ring-white/10 sm:p-4">
+      <div className="flex items-center gap-1.5 text-[11px] text-sky-100/80 sm:gap-2 sm:text-xs">
         {icon}
         {label}
       </div>
-      <p className="mt-2 text-xl font-semibold tracking-tight">{value}</p>
-      <p className="mt-1 text-xs text-slate-300">{hint}</p>
+      <p className="mt-1.5 text-base font-semibold tracking-tight sm:mt-2 sm:text-xl">
+        {value}
+      </p>
+      <p className="mt-1 text-[11px] leading-4 text-slate-300 sm:text-xs">{hint}</p>
     </div>
   );
 }
@@ -404,9 +459,9 @@ function FilterRow<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-      <span className="w-12 shrink-0 text-xs text-muted-foreground">{label}</span>
-      <div className="flex flex-wrap gap-1.5">
+    <div className="flex flex-col gap-2">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {options.map((option) => (
           <Button
             key={option}
@@ -414,6 +469,7 @@ function FilterRow<T extends string>({
             size="sm"
             variant={value === option ? "default" : "outline"}
             onClick={() => onChange(option)}
+            className="h-9 shrink-0"
           >
             {option}
           </Button>
