@@ -50,10 +50,6 @@ def exchange_of(code: str) -> str:
     return "深交所"
 
 
-def market_id(code: str) -> str:
-    return "1" if code.startswith("6") else "0"
-
-
 def parse_date(value: str | None) -> str | None:
     if not value:
         return None
