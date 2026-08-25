@@ -342,7 +342,7 @@ export function IpoDashboard({ data }: Props) {
         ) : null}
 
         <p className="pb-6 text-xs leading-5 text-muted-foreground">
-          {data.note} 交易记录保存在仓库文件 data/trades.json。理论最高 =（次日最高 − 首日最低）/ 首日最低；理论最低 =（次日最低 − 首日最高）/ 首日最高；实际收益率 = 次日收益 /（买入价 × 股数）。
+          {data.note} 交易与新股数据优先存 Neon Postgres；本地无数据库时回退到 data/*.json。理论最高 =（次日最高 − 首日最低）/ 首日最低；理论最低 =（次日最低 − 首日最高）/ 首日最高；实际收益率 = 次日收益 /（买入价 × 股数）。
         </p>
       </main>
 
