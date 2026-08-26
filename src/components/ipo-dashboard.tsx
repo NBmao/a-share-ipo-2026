@@ -2,15 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Download,
-  Search,
-  NotebookPen,
-  ChartColumn,
-  RefreshCw,
-} from "lucide-react";
+import { Search } from "lucide-react";
+import { AppTopbar, type AppTab } from "@/components/app-topbar";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
@@ -48,7 +43,6 @@ import {
 import { cn } from "@/lib/utils";
 
 type Props = { data: IpoPayload };
-type AppTab = "list" | "journal" | "summary";
 
 export function IpoDashboard({ data }: Props) {
   const router = useRouter();
@@ -105,85 +99,18 @@ export function IpoDashboard({ data }: Props) {
 
   return (
     <div className="flex flex-1 flex-col">
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0f2744] text-white shadow-md">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-[11px] font-medium tracking-[0.16em] text-sky-200/80 uppercase">
-                2026 A-SHARE IPO
-              </p>
-              <p className="truncate text-sm text-slate-300">
-                截至 <span className="font-medium text-white">{data.asOf}</span>
-                {refreshMessage ? ` · ${refreshMessage}` : ""}
-              </p>
-            </div>
-            <div className="flex shrink-0 gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={refreshing}
-                onClick={() => void refreshIpoData()}
-                className="h-10 border-white/30 bg-white/10 px-3 text-white hover:bg-white/20 hover:text-white"
-              >
-                <RefreshCw className={cn("size-4", refreshing && "animate-spin")} />
-                <span className="hidden sm:inline">{refreshing ? "刷新中…" : "刷新"}</span>
-              </Button>
-              <a
-                href="/ipo-2026.xlsx"
-                download="2026新股_按上市日期.xlsx"
-                className={cn(
-                  buttonVariants({ size: "sm" }),
-                  "h-10 bg-white px-3 text-[#0f2744] hover:bg-sky-50",
-                )}
-                aria-label="下载 Excel"
-              >
-                <Download />
-                <span className="hidden sm:inline">Excel</span>
-              </a>
-            </div>
-          </div>
-
-          <div
-            role="tablist"
-            aria-label="功能页签"
-            className="grid grid-cols-3 gap-1.5 rounded-xl bg-black/20 p-1.5"
-          >
-            {(
-              [
-                { id: "list", label: "新股列表", icon: Search },
-                { id: "journal", label: "交易记账", icon: NotebookPen },
-                { id: "summary", label: "收益汇总", icon: ChartColumn },
-              ] as const
-            ).map((item) => {
-              const Icon = item.icon;
-              const active = tab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => {
-                    setSelected(null);
-                    setTab(item.id);
-                    setRefreshMessage(null);
-                  }}
-                  className={cn(
-                    "inline-flex h-12 min-h-12 items-center justify-center gap-2 rounded-lg px-2 text-sm font-semibold transition-colors sm:h-14 sm:text-base [&_svg]:pointer-events-none",
-                    active
-                      ? "bg-white text-[#0f2744] shadow-sm"
-                      : "text-slate-200 hover:bg-white/10 hover:text-white",
-                  )}
-                >
-                  <Icon className="size-4 sm:size-5" aria-hidden />
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </header>
+      <AppTopbar
+        asOf={data.asOf}
+        refreshMessage={refreshMessage}
+        refreshing={refreshing}
+        tab={tab}
+        onTabChange={(next) => {
+          setSelected(null);
+          setTab(next);
+          setRefreshMessage(null);
+        }}
+        onRefresh={() => void refreshIpoData()}
+      />
 
       <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-3 px-3 py-4 sm:gap-4 sm:px-6 sm:py-6 lg:px-8">
         {tab === "list" ? (

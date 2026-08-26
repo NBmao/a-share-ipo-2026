@@ -67,4 +67,11 @@ export async function ensureSchema() {
       updated_at TIMESTAMPTZ
     )
   `;
+  await db`
+    CREATE TABLE IF NOT EXISTS app_auth (
+      username TEXT PRIMARY KEY,
+      password_hash TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `;
 }
