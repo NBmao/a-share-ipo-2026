@@ -1,0 +1,6 @@
+{
+  "name": "A-share IPO 2026",
+  "install": "npm ci\npip3 install -r requirements.txt --user",
+  "start": "npm run dev",
+  "ports": [43123]
+}
